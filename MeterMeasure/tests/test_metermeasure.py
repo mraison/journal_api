@@ -12,7 +12,7 @@ def test_get_a_user(client):
     assert data['lastName'] == 'Doe'
 
 
-def test_get_invalid_doctor(client):
+def test_get_invalid_user(client):
     # Test getting a single doctor that doesn't exist
     rv = client.get('/users/2')
     assert rv.status_code == 404
