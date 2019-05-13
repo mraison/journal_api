@@ -10,10 +10,11 @@ CREATE TABLE users (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     firstName TEXT NOT NULL,
     lastName TEXT NOT NULL
-)
+);
 
 CREATE TABLE records (
   ID INTEGER PRIMARY KEY AUTOINCREMENT,
+  userID INT NOT NULL,
   unixTime INT NOT NULL, -- Unix time stamp interpretation of the time.
   dateTimeString TEXT NOT NULL, -- ISO8601 format datetime string: YYYY-MM-DD, HH:MM:SS.MMM
   metricUnits TEXT NOT NULL, -- The is the units we're measuring in. This could be anything like lbs to percentages.
@@ -21,7 +22,8 @@ CREATE TABLE records (
   -- This table will include columns for the different data types: INT, TEXT, and REAL
   metricValueIDPointer INT NOT NULL,
   notes TEXT,
-  FOREIGN KEY (metricValueIDPointer) REFERENCES recordValueStore (ID)
+  FOREIGN KEY (metricValueIDPointer) REFERENCES recordValueStore (ID),
+  FOREIGN KEY (userID) REFERENCES users (ID)
 );
 
 CREATE TABLE recordValueStore (
@@ -29,72 +31,72 @@ CREATE TABLE recordValueStore (
     intVal INT,
     strVal TEXT,
     floatVal REAL
-)
+);
 
 CREATE TABLE recordTagGroups (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     tagGroupName TEXT,
     userID INT NOT NULL,
     recordIDPointer INT NOT NULL,
-    FOREIGN KEY (recordIDPointer) REFERENCES records (ID),
-    UNIQUE(userID, tagGroupName) -- Can't have two groups named the same thing.
-)
+    FOREIGN KEY (recordIDPointer) REFERENCES records (ID)
+--    UNIQUE(userID, tagGroupName) -- Can't have two groups named the same thing.
+);
 
 INSERT INTO users(ID, firstName, lastName) VALUES (0, 'John', 'Doe');
 INSERT INTO users(ID, firstName, lastName) VALUES (1, 'Matthew', 'Raison');
 
 
-INSERT INTO recordValueStore(0, 1, null, null)
-INSERT INTO recordValueStore(1, 1, null, null)
-INSERT INTO recordValueStore(2, 1, null, null)
-INSERT INTO recordValueStore(3, 2, null, null)
-INSERT INTO recordValueStore(4, 3, null, null)
+INSERT INTO recordValueStore VALUES (0, 1, null, null);
+INSERT INTO recordValueStore VALUES (1, 1, null, null);
+INSERT INTO recordValueStore VALUES (2, 1, null, null);
+INSERT INTO recordValueStore VALUES (3, 2, null, null);
+INSERT INTO recordValueStore VALUES (4, 3, null, null);
 
 
-INSERT INTO recordValueStore(5, null, '90%', null)
-INSERT INTO recordValueStore(6, null, '80%', null)
-INSERT INTO recordValueStore(7, null, '50%', null)
-
-
-INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'meters', 0, 'Test metric record in meters.')
-INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (1, 1557453426, datetime('2019-05-09T22:02:00.000'), 'meters', 1, 'Test metric record in meters.')
-INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (2, 1557453458, datetime('2019-05-09T22:02:32.000'), 'meters', 2, 'Test metric record in meters.')
-INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (3, 1557453366, datetime('2019-05-09T22:00:00.000'), 'feet', 3, 'Test metric record in feet.')
-INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (4, 1557453426, datetime('2019-05-09T22:00:01.000'), 'feet', 4, 'Test metric record in feet.')
+INSERT INTO recordValueStore VALUES (5, null, '90%', null);
+INSERT INTO recordValueStore VALUES (6, null, '80%', null);
+INSERT INTO recordValueStore VALUES (7, null, '50%', null);
 
 
 INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (5, 1557453366, datetime('2019-05-09T22:00:00.000'), 'percentage', 5, 'Test metric record in percentage.')
+    VALUES (0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'meters', 0, 'Test metric record in meters.');
 INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (6, 1557453426, datetime('2019-05-09T22:02:00.000'), 'percentage', 6, 'Test metric record in percentage.')
+    VALUES (1, 1557453426, datetime('2019-05-09T22:02:00.000'), 'meters', 1, 'Test metric record in meters.');
 INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (7, 1557453458, datetime('2019-05-09T22:02:32.000'), 'percentage', 7, 'Test metric record in percentage.')
+    VALUES (2, 1557453458, datetime('2019-05-09T22:02:32.000'), 'meters', 2, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
+    VALUES (3, 1557453366, datetime('2019-05-09T22:00:00.000'), 'feet', 3, 'Test metric record in feet.');
+INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
+    VALUES (4, 1557453426, datetime('2019-05-09T22:00:01.000'), 'feet', 4, 'Test metric record in feet.');
+
+
+INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
+    VALUES (5, 1557453366, datetime('2019-05-09T22:00:00.000'), 'percentage', 5, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
+    VALUES (6, 1557453426, datetime('2019-05-09T22:02:00.000'), 'percentage', 6, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
+    VALUES (7, 1557453458, datetime('2019-05-09T22:02:32.000'), 'percentage', 7, 'Test metric record in percentage.');
 
 
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (0, 'How far can I throw a base ball', 0, 0)
+    VALUES (0, 'How far can I throw a base ball', 0, 0);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (1, 'How far can I throw a base ball', 0, 1)
+    VALUES (1, 'How far can I throw a base ball', 0, 1);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (2, 'How far can I throw a base ball', 0, 2)
+    VALUES (2, 'How far can I throw a base ball', 0, 2);
 
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (3, 'Sunflow Growth', 0, 3)
+    VALUES (3, 'Sunflow Growth', 0, 3);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (4, 'Sunflow Growth', 0, 4)
+    VALUES (4, 'Sunflow Growth', 0, 4);
 
 
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (5, 'Heart Rate Cap.', 1, 5)
+    VALUES (5, 'Heart Rate Cap.', 1, 5);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (6, 'Heart Rate Cap.', 1, 6)
+    VALUES (6, 'Heart Rate Cap.', 1, 6);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (7, 'Heart Rate Cap.', 1, 7)
+    VALUES (7, 'Heart Rate Cap.', 1, 7);
 
 --
 --INSERT INTO doctors(id, first_name, last_name) VALUES (0, 'John', 'Doe');

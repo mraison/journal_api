@@ -47,7 +47,7 @@ def init_db_command():
 
 
 def init_app(app):
-    """Register database functions with the Flask app. This is called by
+    """Register database functions with the Flask MeterMeasure. This is called by
     the application factory.
     """
     app.teardown_appcontext(close_db)

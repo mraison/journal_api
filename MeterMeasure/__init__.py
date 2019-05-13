@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask, jsonify, request
-import db
+from . import db
 
 # http://flask.pocoo.org/docs/1.0/tutorial/database/
 def create_app(test_config=None):
