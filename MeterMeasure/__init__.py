@@ -37,6 +37,7 @@ def create_app(test_config=None):
         try:
             firstName = req_data['firstName']
             lastName = req_data['lastName']
+            id = None
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
 
@@ -44,15 +45,17 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # cursor.execute(
-                # @todo add query insert here.
-            # )
-
-            # @todo add check that query was successful
+            cursor.execute(
+                'INSERT INTO users (firstName, lastName) '
+                'Values(?, ?)',
+                (firstName, lastName,)
+            )
+            id = cursor.lastrowid
+            cursor.close()
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
-        data = {'ID': None, 'firstName': firstName, 'lastName': lastName}
+        data = {'ID': id, 'firstName': firstName, 'lastName': lastName}
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>', methods=['GET'])
@@ -60,15 +63,23 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # cursor.execute(
-                # @todo add query insert here.
-            # )
+            result = cursor.execute(
+                'SELECT ID, firstName, lastName '
+                'FROM users '
+                'WHERE ID = ?',
+                (userID,)
+            ).fetchone()
+            cursor.close()
 
             # @todo add check that query was successful
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
-        data = {'ID': None, 'firstName': None, 'lastName': None}
+        if result is None:
+            return jsonify({'error_detail': 'User not found'}), 404
+
+        data = dict(zip([key[0] for key in cursor.description], result))
+
         return jsonify(data), 200
 
     # Note: Must set the content type to JSON. Use something like:
@@ -87,16 +98,19 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # result = cursor.execute(
-                # @todo add query
-            # )
+            result = cursor.execute(
+                'UPDATE users '
+                'SET firstName = ?, lastName = ? '
+                'WHERE ID = ?',
+                (firstName, lastName, userID)
+            )
 
-            # @todo check query worked
+            cursor.close()
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
-        # if result.rowcount == 0:
-        #     return jsonify({'error_detail': 'User could not be updated.'}), 404
+        if result.rowcount == 0:
+            return jsonify({'error_detail': 'User could not be updated.'}), 404
 
         return jsonify({}), 200
 
@@ -106,16 +120,19 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # result = cursor.execute(
+            result = cursor.execute(
                 # @todo add query
-            # )
+                'DELETE FROM users '
+                'WHERE ID = ?',
+                (userID,)
+            )
 
-            # @todo check query worked
+            cursor.close()
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
-        # if result.rowcount == 0:
-        #     return jsonify({'error_detail': 'User could not be deleted'}), 404
+        if result.rowcount == 0:
+            return jsonify({'error_detail': 'User could not be deleted'}), 404
 
         return jsonify({}), 200
 
@@ -142,7 +159,7 @@ def create_app(test_config=None):
 
             # @todo check query worked
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
         # if result.rowcount == 0:
         #     return jsonify({'error_detail': 'Failed to record point.'}), 404
@@ -162,7 +179,7 @@ def create_app(test_config=None):
 
             # @todo check query worked
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
         data = []
         return jsonify(data), 200
@@ -180,7 +197,7 @@ def create_app(test_config=None):
 
             # @todo check query worked
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
         data = {'time': None, 'units': None, 'value': None, 'notes': None, 'tags': []}
         return jsonify(data), 200
@@ -198,7 +215,7 @@ def create_app(test_config=None):
 
             # @todo check query worked
         except Exception as e:
-            return jsonify({'error_detail': e.message}), 400
+            return jsonify({'error_detail': str(e)}), 400
 
         # if result.rowcount == 0:
         #     return jsonify({'error_detail': 'Failed to delete point.'}), 404
