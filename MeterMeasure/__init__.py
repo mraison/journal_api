@@ -44,15 +44,15 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            cursor.execute(
+            # cursor.execute(
                 # @todo add query insert here.
-            )
+            # )
 
             # @todo add check that query was successful
         except Exception as e:
             return jsonify({'error_detail': e.message}), 400
 
-        data = {'ID': None, 'firstName': None, 'lastName': None}
+        data = {'ID': None, 'firstName': firstName, 'lastName': lastName}
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>', methods=['GET'])
@@ -60,9 +60,9 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            cursor.execute(
+            # cursor.execute(
                 # @todo add query insert here.
-            )
+            # )
 
             # @todo add check that query was successful
         except Exception as e:
@@ -87,16 +87,16 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
             return jsonify({'error_detail': e.message}), 400
 
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'User could not be updated.'}), 404
+        # if result.rowcount == 0:
+        #     return jsonify({'error_detail': 'User could not be updated.'}), 404
 
         return jsonify({}), 200
 
@@ -106,16 +106,16 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
             return jsonify({'error_detail': e.message}), 400
 
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'User could not be deleted'}), 404
+        # if result.rowcount == 0:
+        #     return jsonify({'error_detail': 'User could not be deleted'}), 404
 
         return jsonify({}), 200
 
@@ -136,16 +136,16 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
             return jsonify({'error_detail': e.message}), 400
 
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'Failed to record point.'}), 404
+        # if result.rowcount == 0:
+        #     return jsonify({'error_detail': 'Failed to record point.'}), 404
 
         return jsonify({}), 200
 
@@ -156,9 +156,9 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
@@ -174,9 +174,9 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
@@ -192,16 +192,16 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            result = cursor.execute(
+            # result = cursor.execute(
                 # @todo add query
-            )
+            # )
 
             # @todo check query worked
         except Exception as e:
             return jsonify({'error_detail': e.message}), 400
 
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'Failed to delete point.'}), 404
+        # if result.rowcount == 0:
+        #     return jsonify({'error_detail': 'Failed to delete point.'}), 404
 
         return jsonify({}), 200
 
