@@ -88,6 +88,17 @@ def test_update_invalid_user(client):
     assert data['error_detail'] == 'User could not be updated.'
 
 
+    rv = client.put('/users/2',
+                    data=json.dumps(dict(firstName='Elmer')),
+                    content_type='application/json')
+
+
+    assert rv.status_code == 400
+
+    data = json.loads(rv.data)
+    assert data['error_detail'] == 'Missing required field'
+
+
 def test_delete_invalid_user(client):
     # Test deleting a single doctor that doesn't exist.
     rv = client.delete('/users/2')
