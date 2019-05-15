@@ -19,24 +19,24 @@ INSERT INTO recordValueStore VALUES (7, null, '50%', null);
 
 
 DELETE FROM records;
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (0, 0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'meters', 0, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (1, 0, 1557453426, datetime('2019-05-09T22:02:00.000'), 'meters', 1, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (2, 0, 1557453458, datetime('2019-05-09T22:02:32.000'), 'meters', 2, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (3, 0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'feet', 3, 'Test metric record in feet.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (4, 0, 1557453426, datetime('2019-05-09T22:00:01.000'), 'feet', 4, 'Test metric record in feet.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (0, 1557453366, 'meters', 0, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (1, 1557453426, 'meters', 1, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (2, 1557453458, 'meters', 2, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (3, 1557453366, 'feet', 3, 'Test metric record in feet.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (4, 1557453426, 'feet', 4, 'Test metric record in feet.');
 
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (5, 1, 1557453366, datetime('2019-05-09T22:00:00.000'), 'percentage', 5, 'Test metric record in percentage.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (6, 1, 1557453426, datetime('2019-05-09T22:02:00.000'), 'percentage', 6, 'Test metric record in percentage.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (7, 1, 1557453458, datetime('2019-05-09T22:02:32.000'), 'percentage', 7, 'Test metric record in percentage.');
 
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (5, 1557453366, 'percentage', 5, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (6, 1557453426, 'percentage', 6, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (7, 1557453458, 'percentage', 7, 'Test metric record in percentage.');
 
 DELETE FROM recordTagGroups;
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)

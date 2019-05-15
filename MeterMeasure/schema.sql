@@ -14,16 +14,16 @@ CREATE TABLE users (
 
 CREATE TABLE records (
   ID INTEGER PRIMARY KEY AUTOINCREMENT,
-  userID INT NOT NULL,        --- @todo remove this. I don't actually need this if I associate points together on a null tag by default
   unixTime INT NOT NULL, -- Unix time stamp interpretation of the time.
-  dateTimeString TEXT NOT NULL, -- ISO8601 format datetime string: YYYY-MM-DD, HH:MM:SS.MMM
+-- removing this for now because I like the timestamp better.
+--  dateTimeString TEXT NOT NULL, -- ISO8601 format datetime string: YYYY-MM-DD, HH:MM:SS.MMM
   metricUnits TEXT NOT NULL, -- The is the units we're measuring in. This could be anything like lbs to percentages.
   -- I want flexibility in how I'm recording so I'm going to have this point to a separate "values" table.
   -- This table will include columns for the different data types: INT, TEXT, and REAL
   metricValueIDPointer INT NOT NULL,
   notes TEXT,
-  FOREIGN KEY (metricValueIDPointer) REFERENCES recordValueStore (ID),
-  FOREIGN KEY (userID) REFERENCES users (ID)
+  FOREIGN KEY (metricValueIDPointer) REFERENCES recordValueStore (ID)
+--  FOREIGN KEY (userID) REFERENCES users (ID)
 );
 
 CREATE TABLE recordValueStore (
@@ -58,24 +58,24 @@ INSERT INTO recordValueStore VALUES (6, null, '80%', null);
 INSERT INTO recordValueStore VALUES (7, null, '50%', null);
 
 
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (0, 0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'meters', 0, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (1, 0, 1557453426, datetime('2019-05-09T22:02:00.000'), 'meters', 1, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (2, 0, 1557453458, datetime('2019-05-09T22:02:32.000'), 'meters', 2, 'Test metric record in meters.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (3, 0, 1557453366, datetime('2019-05-09T22:00:00.000'), 'feet', 3, 'Test metric record in feet.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (4, 0, 1557453426, datetime('2019-05-09T22:00:01.000'), 'feet', 4, 'Test metric record in feet.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (0, 1557453366, 'meters', 0, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (1, 1557453426, 'meters', 1, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (2, 1557453458, 'meters', 2, 'Test metric record in meters.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (3, 1557453366, 'feet', 3, 'Test metric record in feet.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (4, 1557453426, 'feet', 4, 'Test metric record in feet.');
 
 
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (5, 1, 1557453366, datetime('2019-05-09T22:00:00.000'), 'percentage', 5, 'Test metric record in percentage.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (6, 1, 1557453426, datetime('2019-05-09T22:02:00.000'), 'percentage', 6, 'Test metric record in percentage.');
-INSERT INTO records(ID, userID, unixTime, dateTimeString, metricUnits, metricValueIDPointer, notes)
-    VALUES (7, 1, 1557453458, datetime('2019-05-09T22:02:32.000'), 'percentage', 7, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (5, 1557453366, 'percentage', 5, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (6, 1557453426, 'percentage', 6, 'Test metric record in percentage.');
+INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
+    VALUES (7, 1557453458, 'percentage', 7, 'Test metric record in percentage.');
 
 
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)

@@ -35,8 +35,8 @@ def create_app(test_config=None):
         req_data = request.get_json()
 
         try:
-            firstName = req_data['firstName']
-            lastName = req_data['lastName']
+            firstName = req_data["firstName"]
+            lastName = req_data["lastName"]
             id = None
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
@@ -52,6 +52,7 @@ def create_app(test_config=None):
             )
             id = cursor.lastrowid
             cursor.close()
+            db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
@@ -106,6 +107,7 @@ def create_app(test_config=None):
             )
 
             cursor.close()
+            db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
@@ -128,6 +130,7 @@ def create_app(test_config=None):
             )
 
             cursor.close()
+            db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
@@ -147,24 +150,71 @@ def create_app(test_config=None):
             value = req_data['value']
             notes = req_data['notes']
             tags = req_data['tags']
+            tags.append(None) ## ensure the null group exists
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
 
+        ############################
+        #    Function specific stuff start.
+        ############################
+        # cast values to record
+        try:
+            valueInt = int(value)
+        except Exception as e:
+            valueInt = None
+
+        try:
+            valueString = str(value)
+        except Exception as e:
+            valueString = None
+
+        try:
+            valueReal = float(value)
+        except Exception as e:
+            valueReal = None
+
         try:
             cursor = db.get_db().cursor()
+            valresult = cursor.execute(
+                'INSERT INTO recordValueStore (intVal, strVal, floatVal) '
+                'VALUES(?, ?, ?)',
+                (valueInt, valueString, valueReal,)
+            )
+            valueID = valresult.lastrowid
+            db.get_db().commit()
 
-            # result = cursor.execute(
-                # @todo add query
-            # )
+            recordresult = cursor.execute(
+                'INSERT INTO records (unixTime, metricUnits, metricValueIDPointer, notes) '
+                'VALUES(?, ?, ?, ?)',
+                (int(time), units, valueID, notes,)
+            )
+            recordID = recordresult.lastrowid
+            db.get_db().commit()
 
-            # @todo check query worked
+            tagUpdates = []
+            for tag in enumerate(tags):
+                tagResults = cursor.execute(
+                    'INSERT INTO recordTagGroups (tagGroupName, userID, recordIDPointer) '
+                    'VALUES(?, ?, ?)',
+                    (str(tag), userID, recordID,)
+                )
+                tagUpdates.append(tagResults.lastrowid)
+
+            cursor.close()
+            db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
+        ############################
+        #    Function specific stuff end.
+        ############################
 
-        # if result.rowcount == 0:
-        #     return jsonify({'error_detail': 'Failed to record point.'}), 404
+        if len(tagUpdates) == 0:
+            return jsonify({'error_detail': 'Failed to record point.'}), 404
 
-        return jsonify({}), 200
+        data = {
+            'ID': valueID
+        }
+        return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
     def search_points(userID):
@@ -172,16 +222,38 @@ def create_app(test_config=None):
         # @todo just return the http response
         try:
             cursor = db.get_db().cursor()
+            result = cursor.execute(
+                'SELECT '
+                '   rvs.ID as ID, '
+                '   r.unixTime AS time, '
+                '   r.metricUnits AS units, '
+                '   rvs.intVal AS valueInt, '
+                '   rvs.strVal AS valueStr, '
+                '   rvs.floatVal AS valueReal, '
+                '   r.notes AS notes, '
+                '   Group_Concat(rtg.tagGroupName) AS tags '
+                'FROM recordValueStore rvs '
+                'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
+                'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '
+                'WHERE rtg.userID = ? '
+                'GROUP BY '
+                '   r.unixTime, '
+                '   r.metricUnits, '
+                '   rvs.intVal, '
+                '   rvs.strVal, '
+                '   rvs.floatVal, '
+                '   r.notes',
+                (userID,)
+            ).fetchall()
 
-            # result = cursor.execute(
-                # @todo add query
-            # )
-
-            # @todo check query worked
+            cursor.close()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
-        data = []
+        data = [dict(zip([key[0] for key in cursor.description], row)) for row in result]
+        if len(data) == 0:
+            return jsonify({'error_detail': 'No points found'}), 404
+
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
@@ -191,17 +263,41 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # result = cursor.execute(
-                # @todo add query
-            # )
+            result = cursor.execute(
+                'SELECT '
+                '   r.unixTime AS time, '
+                '   r.metricUnits AS units, '
+                '   rvs.intVal AS valueInt, '
+                '   rvs.strVal AS valueStr, '
+                '   rvs.floatVal AS valueReal, '
+                '   r.notes AS notes, '
+                '   Group_Concat(rtg.tagGroupName) AS tags '
+                'FROM recordValueStore rvs '
+                'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
+                'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '
+                'WHERE rtg.userID = ? AND rvs.ID = ? '
+                'GROUP BY '
+                '   r.unixTime, '
+                '   r.metricUnits, '
+                '   rvs.intVal, '
+                '   rvs.strVal, '
+                '   rvs.floatVal, '
+                '   r.notes',
+                (userID, pointID,)
+            ).fetchone()
 
-            # @todo check query worked
+            cursor.close()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
-        data = {'time': None, 'units': None, 'value': None, 'notes': None, 'tags': []}
+        if result is None:
+            return jsonify({'error_detail': 'Point not found'}), 404
+
+        data = dict(zip([key[0] for key in cursor.description], result))
         return jsonify(data), 200
 
+    ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
+    # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
     def delete_point(userID, pointID):
         # @todo just return the http response
@@ -209,16 +305,55 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
 
-            # result = cursor.execute(
-                # @todo add query
-            # )
+            result = cursor.execute(
+                'WITH record_set as ( '
+                '   SELECT DISTINCT rtg.ID as rtg_id ' ## , r.ID as r_id, rvs.ID as rvs_id
+                '   FROM recordTagGroups rtg '
+                '   INNER JOIN records r ON rtg.recordIDPointer = r.ID '
+                '   INNER JOIN recordValueStore rvs ON r.metricValueIDPointer = rvs.ID '
+                '   WHERE rtg.userID = ? AND rvs.ID = ? '
+                ') '
+                'DELETE FROM recordTagGroups '
+                'WHERE ID in (SELECT rtg_id FROM record_set);'
+                ,
+                (userID, pointID,)
+            )
+            # cursor.close()
+            db.get_db().commit()
 
-            # @todo check query worked
+            result = cursor.execute(
+                'WITH record_set as ( '
+                '   SELECT DISTINCT r.ID as r_id '
+                '   FROM records r '
+                '   INNER JOIN recordValueStore rvs ON r.metricValueIDPointer = rvs.ID '
+                '   WHERE rvs.ID = ? '
+                ') '
+                'DELETE FROM records '
+                'WHERE ID in (SELECT r_id FROM record_set);'
+                ,
+                (pointID,)
+            )
+            db.get_db().commit()
+
+            result = cursor.execute(
+                'WITH record_set as ( '
+                '   SELECT DISTINCT rvs.ID as rvs_id'
+                '   FROM recordValueStore rvs '
+                '   WHERE rvs.ID = ? '
+                ') '
+                'DELETE FROM recordValueStore '
+                'WHERE ID in (SELECT rvs_id FROM record_set);'
+                ,
+                (pointID,)
+            )
+            cursor.close()
+            db.get_db().commit()
+            # db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
-        # if result.rowcount == 0:
-        #     return jsonify({'error_detail': 'Failed to delete point.'}), 404
+        if result.rowcount == 0:
+            return jsonify({'error_detail': 'Failed to delete point.'}), 404
 
         return jsonify({}), 200
 
