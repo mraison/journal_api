@@ -1,7 +1,19 @@
 import os
 
 from flask import Flask, jsonify, request
+import re
 from . import db
+
+###################
+# I'm just going to toss this utility down here.
+###################
+def _get_point_value_type(value):
+    v = str(value)
+    if not re.match('^\d+$', v) is None:
+        return 'int'
+    if not re.match('^\d+\.\d+$', v) is None:
+        return 'float'
+    return 'string'
 
 # http://flask.pocoo.org/docs/1.0/tutorial/database/
 def create_app(test_config=None):
@@ -158,20 +170,16 @@ def create_app(test_config=None):
         #    Function specific stuff start.
         ############################
         # cast values to record
-        try:
+        valueInt = None
+        valueString = None
+        valueReal = None
+        inputValType = _get_point_value_type(value)
+        if inputValType == 'int':
             valueInt = int(value)
-        except Exception as e:
-            valueInt = None
-
-        try:
-            valueString = str(value)
-        except Exception as e:
-            valueString = None
-
-        try:
+        elif inputValType == 'float':
             valueReal = float(value)
-        except Exception as e:
-            valueReal = None
+        else:
+            valueString = str(value)
 
         try:
             cursor = db.get_db().cursor()
@@ -218,8 +226,6 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
     def search_points(userID):
-        # @todo return [{'time', 'units', 'value', 'notes', 'tags'}...]
-        # @todo just return the http response
         try:
             cursor = db.get_db().cursor()
             result = cursor.execute(
@@ -258,13 +264,12 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
     def get_point(userID, pointID):
-        # @todo return {'time', 'units', 'value', 'notes', 'tags'}
-        # @todo just return the http response
         try:
             cursor = db.get_db().cursor()
 
             result = cursor.execute(
                 'SELECT '
+                '   rvs.ID as ID, '
                 '   r.unixTime AS time, '
                 '   r.metricUnits AS units, '
                 '   rvs.intVal AS valueInt, '

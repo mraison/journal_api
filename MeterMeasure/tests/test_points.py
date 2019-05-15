@@ -51,5 +51,5 @@ def test_search_points(client):
     # @todo add the data link between points and users...
     # @todo also add more tests for filtering on tags / time ranges.
     assert len(data) > 1
-    for field in ['time', 'units', 'valueInt', 'valueStr', 'valueReal', 'notes', 'tags']:
+    for field in ['ID', 'time', 'units', 'valueInt', 'valueStr', 'valueReal', 'notes', 'tags']:
         assert field in data[0]
