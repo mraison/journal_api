@@ -226,6 +226,19 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
     def search_points(userID):
+        tagsInput = request.args.get('tags')
+        tags = tagsInput.split(',') if not tagsInput is None else None
+        timeStart = request.args.get('timeStart')
+        timeEnd = request.args.get('timeEnd')
+        tagWhereClause = ''
+        if tags:
+            tagWhereClause = 'AND (rtg.tagGroupName LIKE \'' + '\' OR rtg.tagGroupName LIKE \''.join(tags) + '\') '
+
+            # return jsonify(tagWhereClause), 200
+        timeWhereClause = ''
+        if timeStart and timeEnd:
+            timeWhereClause = 'AND (r.unixTime >= ' + str(timeStart) + ' AND r.unixTime <= ' + str(timeEnd) + ') '
+
         try:
             cursor = db.get_db().cursor()
             result = cursor.execute(
@@ -242,13 +255,15 @@ def create_app(test_config=None):
                 'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
                 'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '
                 'WHERE rtg.userID = ? '
+                '%s '
+                '%s '
                 'GROUP BY '
                 '   r.unixTime, '
                 '   r.metricUnits, '
                 '   rvs.intVal, '
                 '   rvs.strVal, '
                 '   rvs.floatVal, '
-                '   r.notes',
+                '   r.notes' % (tagWhereClause, timeWhereClause),
                 (userID,)
             ).fetchall()
 
@@ -353,7 +368,6 @@ def create_app(test_config=None):
             )
             cursor.close()
             db.get_db().commit()
-            # db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
