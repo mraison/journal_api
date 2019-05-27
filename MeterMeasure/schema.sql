@@ -53,9 +53,9 @@ INSERT INTO recordValueStore VALUES (3, 2, null, null);
 INSERT INTO recordValueStore VALUES (4, 3, null, null);
 
 
-INSERT INTO recordValueStore VALUES (5, null, '90%', null);
-INSERT INTO recordValueStore VALUES (6, null, '80%', null);
-INSERT INTO recordValueStore VALUES (7, null, '50%', null);
+INSERT INTO recordValueStore VALUES (5, null, null, 0.9);
+INSERT INTO recordValueStore VALUES (6, null, null, 0.8);
+INSERT INTO recordValueStore VALUES (7, null, null, 0.5);
 
 
 INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)

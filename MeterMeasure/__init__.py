@@ -1,6 +1,8 @@
 import os
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+import sys
 import re
 from . import db
 
@@ -15,6 +17,18 @@ def _get_point_value_type(value):
         return 'float'
     return 'string'
 
+def choose_between_value_types(
+        intVal,
+        floatVal,
+        stringVal
+):
+    if intVal:
+        return intVal
+    if floatVal:
+        return floatVal
+    if stringVal:
+        return stringVal
+
 # http://flask.pocoo.org/docs/1.0/tutorial/database/
 def create_app(test_config=None):
     """Create and configure an instance of the Flask application."""
@@ -24,6 +38,8 @@ def create_app(test_config=None):
         SECRET_KEY='dev',
         # store the database in the instance folder
         DATABASE=os.path.join(app.instance_path, 'records.sqlite'),
+
+        CORS_HEADERS='Content-Type',
     )
 
     if test_config is None:
@@ -41,6 +57,8 @@ def create_app(test_config=None):
 
     # register the database commands
     db.init_app(app)
+    # Cors stuff
+    cors = CORS(app, resources={r'/*': {'origins': '*'}}, headers='Content-Type', )
 
     @app.route('/users', methods=['POST'])
     def create_user():
@@ -152,16 +170,19 @@ def create_app(test_config=None):
         return jsonify({}), 200
 
     @app.route('/users/<int:userID>/points', methods=['POST'])
+    # @cross_origin()
     def record_point(userID):
+        # print(request, file=sys.stderr)
+        # print(request, file=sys.stdout)
         # @todo just return the http response
         req_data = request.get_json()
 
         try:
-            time = req_data['time']
-            units = req_data['units']
-            value = req_data['value']
-            notes = req_data['notes']
-            tags = req_data['tags']
+            time = req_data['time']   # int
+            units = req_data['units'] # string
+            value = req_data['value'] # mixed
+            notes = req_data['notes'] # string
+            tags = req_data['tags']   # []string
             tags.append(None) ## ensure the null group exists
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
@@ -225,6 +246,7 @@ def create_app(test_config=None):
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
+    # @cross_origin()
     def search_points(userID):
         tagsInput = request.args.get('tags')
         tags = tagsInput.split(',') if not tagsInput is None else None
@@ -275,9 +297,16 @@ def create_app(test_config=None):
         if len(data) == 0:
             return jsonify({'error_detail': 'No points found'}), 404
 
-        return jsonify(data), 200
+        def df(d):
+            d['value'] = choose_between_value_types(d['valueInt'], d['valueReal'], d['valueStr'])
+            return d
+
+        response_data = [df(d) for d in data]
+
+        return jsonify(response_data), 200
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
+    # @cross_origin()
     def get_point(userID, pointID):
         try:
             cursor = db.get_db().cursor()
@@ -314,11 +343,14 @@ def create_app(test_config=None):
             return jsonify({'error_detail': 'Point not found'}), 404
 
         data = dict(zip([key[0] for key in cursor.description], result))
+        data['value'] = choose_between_value_types(data['valueInt'], data['valueReal'], data['valueStr'])
+        ## choose_between_value_types
         return jsonify(data), 200
 
     ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
+    # @cross_origin()
     def delete_point(userID, pointID):
         # @todo just return the http response
         # @todo just return the http response

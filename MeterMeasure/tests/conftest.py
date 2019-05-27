@@ -12,10 +12,10 @@ with open(os.path.join(os.path.dirname(__file__), 'data.sql'), 'rb') as f:
 
 @pytest.fixture
 def app():
-    """Create and configure a new MeterMeasure instance for each test."""
+    """Create and configure a new metermeasure instance for each test."""
     # create a temporary file to isolate the database for each test
     db_fd, db_path = tempfile.mkstemp()
-    # create the MeterMeasure with common test config
+    # create the metermeasure with common test config
     app = create_app({
         'TESTING': True,
         'DATABASE': db_path,
@@ -35,5 +35,5 @@ def app():
 
 @pytest.fixture
 def client(app):
-    """A test client for the MeterMeasure."""
+    """A test client for the metermeasure."""
     return app.test_client()
