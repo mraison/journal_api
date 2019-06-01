@@ -8,8 +8,10 @@ DROP TABLE IF EXISTS recordTagGroups;
 
 CREATE TABLE users (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
-    firstName TEXT NOT NULL,
-    lastName TEXT NOT NULL
+    username TEXT NOT NULL,
+    password TEXT NOT NULL,
+    UNIQUE(username)--, -- this will ensure that each user is unique.
+--    UNIQUE(username, password) -- this will ensure that users cannot
 );
 
 CREATE TABLE records (
@@ -98,26 +100,6 @@ INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
     VALUES (7, 'Heart Rate Cap.', 1, 7);
 
---
---INSERT INTO doctors(id, first_name, last_name) VALUES (0, 'John', 'Doe');
---INSERT INTO doctors(id, first_name, last_name) VALUES (1, 'Jane', 'Smith');
---
---INSERT INTO locations(id, address) VALUES (0, '123 Main St');
---INSERT INTO locations(id, address) VALUES (1, '456 Central St');
---
---INSERT INTO doctor_locations(id, doctor_id, location_id) VALUES (0, 0, 0);
---INSERT INTO doctor_locations(id, doctor_id, location_id) VALUES (1, 1, 0);
---INSERT INTO doctor_locations(id, doctor_id, location_id) VALUES (2, 1, 1);
---
----- For testing we're going to imagine that doctor John Doe only works on Monday from 9am till noon.
----- 9am-9:30am is 19 and 11:30am-12:00pm is 23
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (0, 0, 1, 19);
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (1, 0, 1, 20);
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (2, 0, 1, 21);
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (3, 0, 1, 22);
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (4, 0, 1, 23);
---INSERT INTO doctor_schedule(id, doctor_id, day_enumerated, thirty_minute_time_segment) VALUES (5, 0, 1, 24);
---
----- Lets set a default appointment for doctor John Doe at 123 Main St from 9am-10am.
---INSERT INTO appointment_time_chunks(id, appointment_hash_id, doctor_schedule_id, location_id) VALUES (0, '00_119_120', 0, 0);
---INSERT INTO appointment_time_chunks(id, appointment_hash_id, doctor_schedule_id, location_id) VALUES (1, '00_119_120', 1, 0);
+
+INSERT INTO users(ID, username, password) VALUES (0, 'JohnDoe', 'pass');
+INSERT INTO users(ID, username, password) VALUES (1, 'MatthewRaison', 'ThisIsMyPassword');
