@@ -44,8 +44,10 @@ CREATE TABLE recordTagGroups (
 --    UNIQUE(userID, tagGroupName) -- Can't have two groups named the same thing.
 );
 
-INSERT INTO users(ID, firstName, lastName) VALUES (0, 'John', 'Doe');
-INSERT INTO users(ID, firstName, lastName) VALUES (1, 'Matthew', 'Raison');
+--INSERT INTO users(ID, firstName, lastName) VALUES (0, 'John', 'Doe');
+--INSERT INTO users(ID, firstName, lastName) VALUES (1, 'Matthew', 'Raison');
+INSERT INTO users(ID, username, password) VALUES (0, 'JohnDoe', 'pass');
+INSERT INTO users(ID, username, password) VALUES (1, 'MatthewRaison', 'ThisIsMyPassword');
 
 
 INSERT INTO recordValueStore VALUES (0, 1, null, null);
@@ -99,7 +101,3 @@ INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
     VALUES (6, 'Heart Rate Cap.', 1, 6);
 INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
     VALUES (7, 'Heart Rate Cap.', 1, 7);
-
-
-INSERT INTO users(ID, username, password) VALUES (0, 'JohnDoe', 'pass');
-INSERT INTO users(ID, username, password) VALUES (1, 'MatthewRaison', 'ThisIsMyPassword');
