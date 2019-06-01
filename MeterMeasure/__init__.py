@@ -1,10 +1,29 @@
 import os
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 import sys
 import re
 from . import db
+
+from .shared.middleware.jwt import check_jwt
+from .shared.configs.serviceConsts import SECRET
+
+JWT_SECRET = SECRET
+
+## defining additional middleware:
+from functools import wraps
+
+def verify_user():
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(jwt_body, userID, *args, **kws):
+            if not jwt_body['ID'] != userID:
+                abort(401)
+
+            return f(userID, *args, **kws)
+        return decorated_function
+    return decorator
 
 ###################
 # I'm just going to toss this utility down here.
@@ -35,11 +54,10 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         # a default secret that should be overridden by instance config
-        SECRET_KEY='dev',
+        SECRET_KEY=JWT_SECRET,
         # store the database in the instance folder
-        DATABASE=os.path.join(app.instance_path, 'records.sqlite'),
+        DATABASE=os.path.join(app.instance_path, 'records.sqlite')
 
-        CORS_HEADERS='Content-Type',
     )
 
     if test_config is None:
@@ -57,120 +75,14 @@ def create_app(test_config=None):
 
     # register the database commands
     db.init_app(app)
-    # Cors stuff
-    cors = CORS(app, resources={r'/*': {'origins': '*'}}, headers='Content-Type', )
 
-    @app.route('/users', methods=['POST'])
-    def create_user():
-        req_data = request.get_json()
-
-        try:
-            firstName = req_data["firstName"]
-            lastName = req_data["lastName"]
-            id = None
-        except KeyError:
-            return jsonify({'error_detail': 'Missing required field'}), 400
-
-
-        try:
-            cursor = db.get_db().cursor()
-
-            cursor.execute(
-                'INSERT INTO users (firstName, lastName) '
-                'Values(?, ?)',
-                (firstName, lastName,)
-            )
-            id = cursor.lastrowid
-            cursor.close()
-            db.get_db().commit()
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        data = {'ID': id, 'firstName': firstName, 'lastName': lastName}
-        return jsonify(data), 200
-
-    @app.route('/users/<int:userID>', methods=['GET'])
-    def get_user(userID):
-        try:
-            cursor = db.get_db().cursor()
-
-            result = cursor.execute(
-                'SELECT ID, firstName, lastName '
-                'FROM users '
-                'WHERE ID = ?',
-                (userID,)
-            ).fetchone()
-            cursor.close()
-
-            # @todo add check that query was successful
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        if result is None:
-            return jsonify({'error_detail': 'User not found'}), 404
-
-        data = dict(zip([key[0] for key in cursor.description], result))
-
-        return jsonify(data), 200
-
-    # Note: Must set the content type to JSON. Use something like:
-    # curl -X POST -H "Content-Type: application/json" --data '{"first_name": "Joe", "last_name": "Smith"}' http://localhost:5000/doctors
-    @app.route('/users/<int:userID>', methods=['PUT'])
-    def update_user(userID):
-        req_data = request.get_json()
-
-        try:
-            firstName = req_data['firstName']
-            lastName = req_data['lastName']
-        except KeyError:
-            return jsonify({'error_detail': 'Missing required field'}), 400
-
-
-        try:
-            cursor = db.get_db().cursor()
-
-            result = cursor.execute(
-                'UPDATE users '
-                'SET firstName = ?, lastName = ? '
-                'WHERE ID = ?',
-                (firstName, lastName, userID)
-            )
-
-            cursor.close()
-            db.get_db().commit()
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'User could not be updated.'}), 404
-
-        return jsonify({}), 200
-
-    @app.route('/users/<int:userID>', methods=['DELETE'])
-    def delete_user(userID):
-        # @todo just return the http response
-        try:
-            cursor = db.get_db().cursor()
-
-            result = cursor.execute(
-                # @todo add query
-                'DELETE FROM users '
-                'WHERE ID = ?',
-                (userID,)
-            )
-
-            cursor.close()
-            db.get_db().commit()
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'User could not be deleted'}), 404
-
-        return jsonify({}), 200
+    cors = CORS(app, origins='*',
+        headers=['Content-Type', 'Authorization'],
+        expose_headers=['Content-Type', 'Authorization'])
 
     @app.route('/users/<int:userID>/points', methods=['POST'])
-    # @cross_origin()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def record_point(userID):
         # print(request, file=sys.stderr)
         # print(request, file=sys.stdout)
@@ -246,7 +158,8 @@ def create_app(test_config=None):
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
-    # @cross_origin()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def search_points(userID):
         tagsInput = request.args.get('tags')
         tags = tagsInput.split(',') if not tagsInput is None else None
@@ -256,7 +169,6 @@ def create_app(test_config=None):
         if tags:
             tagWhereClause = 'AND (rtg.tagGroupName LIKE \'' + '\' OR rtg.tagGroupName LIKE \''.join(tags) + '\') '
 
-            # return jsonify(tagWhereClause), 200
         timeWhereClause = ''
         if timeStart and timeEnd:
             timeWhereClause = 'AND (r.unixTime >= ' + str(timeStart) + ' AND r.unixTime <= ' + str(timeEnd) + ') '
@@ -306,7 +218,8 @@ def create_app(test_config=None):
         return jsonify(response_data), 200
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
-    # @cross_origin()
+    @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def get_point(userID, pointID):
         try:
             cursor = db.get_db().cursor()
@@ -350,7 +263,8 @@ def create_app(test_config=None):
     ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
-    # @cross_origin()
+    @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def delete_point(userID, pointID):
         # @todo just return the http response
         # @todo just return the http response
