@@ -18,7 +18,7 @@ def verify_user():
     def decorator(f):
         @wraps(f)
         def decorated_function(jwt_body, userID, *args, **kws):
-            if not jwt_body['ID'] != userID:
+            if not jwt_body['ID'] == userID:
                 abort(401)
 
             return f(userID, *args, **kws)
@@ -219,7 +219,7 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @verify_user()
     def get_point(userID, pointID):
         try:
             cursor = db.get_db().cursor()
@@ -264,7 +264,7 @@ def create_app(test_config=None):
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
     @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @verify_user()
     def delete_point(userID, pointID):
         # @todo just return the http response
         # @todo just return the http response
