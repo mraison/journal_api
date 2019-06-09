@@ -94,7 +94,7 @@ def create_app(test_config=None):
             units = req_data['units'] # string
             value = req_data['value'] # mixed
             notes = req_data['notes'] # string
-            tags = req_data['tags']   # []string
+            tags = [] if req_data['tags'] is None else req_data['tags'].split(',') # []string
             tags.append(None) ## ensure the null group exists
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
@@ -133,7 +133,7 @@ def create_app(test_config=None):
             db.get_db().commit()
 
             tagUpdates = []
-            for tag in enumerate(tags):
+            for tag in tags:
                 tagResults = cursor.execute(
                     'INSERT INTO recordTagGroups (tagGroupName, userID, recordIDPointer) '
                     'VALUES(?, ?, ?)',
@@ -184,7 +184,7 @@ def create_app(test_config=None):
                 '   rvs.strVal AS valueStr, '
                 '   rvs.floatVal AS valueReal, '
                 '   r.notes AS notes, '
-                '   Group_Concat(rtg.tagGroupName) AS tags '
+                '   Group_Concat(rtg.tagGroupName, \',\') AS tags '
                 'FROM recordValueStore rvs '
                 'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
                 'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '

@@ -11,4 +11,9 @@ curl -X POST -H "Content-Type: application/json" -d "{\"notes\": \"Test metric r
 curl -X GET -H "Content-Type: application/json" http://127.0.0.1:5000/users/3/points/8
 
 
+curl -X GET -H "Content-Type: application/json" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ%3D%3D.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ%3D%3D.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ%2Fgrc%3D" "http://127.0.0.1:8080/users/1/points?tags=c"
+
+
+filter by tag:
+curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/points?tags=Heart%20Rate%20Cap.
 
