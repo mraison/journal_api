@@ -2,102 +2,153 @@
 -- Drop any existing data and create empty tables.
 
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS records;
-DROP TABLE IF EXISTS recordValueStore;
-DROP TABLE IF EXISTS recordTagGroups;
+DROP TABLE IF EXISTS measurements;
+DROP TABLE IF EXISTS measurementValueStore;
+DROP TABLE IF EXISTS joinMeasurementsToRecordSet;
+DROP TABLE IF EXISTS recordSet;
+DROP TABLE IF EXISTS recordSetPermissionGroups;
 
 CREATE TABLE users (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL,
     password TEXT NOT NULL,
-    UNIQUE(username)--, -- this will ensure that each user is unique.
---    UNIQUE(username, password) -- this will ensure that users cannot
+    UNIQUE(username)
 );
 
-CREATE TABLE records (
+-- measurements
+CREATE TABLE measurements (
   ID INTEGER PRIMARY KEY AUTOINCREMENT,
   unixTime INT NOT NULL, -- Unix time stamp interpretation of the time.
 -- removing this for now because I like the timestamp better.
 --  dateTimeString TEXT NOT NULL, -- ISO8601 format datetime string: YYYY-MM-DD, HH:MM:SS.MMM
-  metricUnits TEXT NOT NULL, -- The is the units we're measuring in. This could be anything like lbs to percentages.
+  units TEXT NOT NULL, -- The is the units we're measuring in. This could be anything like lbs to percentages.
   -- I want flexibility in how I'm recording so I'm going to have this point to a separate "values" table.
   -- This table will include columns for the different data types: INT, TEXT, and REAL
-  metricValueIDPointer INT NOT NULL,
+  measurementValueStoreID INT NOT NULL,
   notes TEXT,
-  FOREIGN KEY (metricValueIDPointer) REFERENCES recordValueStore (ID)
---  FOREIGN KEY (userID) REFERENCES users (ID)
+  FOREIGN KEY (measurementValueStoreID) REFERENCES measurementValueStore (ID),
+  UNIQUE(measurementValueStoreID),
+  UNIQUE(ID)
 );
 
-CREATE TABLE recordValueStore (
+-- measurement values
+CREATE TABLE measurementValueStore (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     intVal INT,
     strVal TEXT,
     floatVal REAL
 );
 
-CREATE TABLE recordTagGroups (
-    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-    tagGroupName TEXT,
-    userID INT NOT NULL,
-    recordIDPointer INT NOT NULL,
-    FOREIGN KEY (recordIDPointer) REFERENCES records (ID)
---    UNIQUE(userID, tagGroupName) -- Can't have two groups named the same thing.
+-- data point series definition
+CREATE TABLE joinMeasurementsToRecordSet (
+    recordSetID INT NOT NULL, -- At the minimum we want the "None" group...
+    measurementsID INT NOT NULL,
+    FOREIGN KEY (measurementsID) REFERENCES measurements (ID),
+    FOREIGN KEY (recordSetID) REFERENCES recordSet (ID),
+    UNIQUE(recordSetID, measurementsID)
+    -- any point can only be included in a group once. (no repetition of measurement instances.)
+--    UNIQUE(userID, tagGroupName)
+--    UNIQUE(recordIDPointer) -- I'm going to leave this requirement out for the time being.
+-- In most cases you'll want only one record set to be associated with a group of measurements unless for example when
+-- the subject you are measuring is part of a larger set of things to be measured. I.E. if you measure your height and want to track
+-- both your height over time and people height over time generally.
 );
 
---INSERT INTO users(ID, firstName, lastName) VALUES (0, 'John', 'Doe');
---INSERT INTO users(ID, firstName, lastName) VALUES (1, 'Matthew', 'Raison');
+-- sets of points for a users records.
+CREATE TABLE recordSet (
+    -- name bits
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    --           + owner bit
+    userID INT NOT NULL, -- This is the owner
+
+    -- group bits
+    recSetPermGroupName TEXT,
+
+    -- permission bits
+    ownerPermissions TEXT NOT NULL, -- either '', 'r', 'w', or 'rw'
+    groupPermissions TEXT NOT NULL, -- either '', 'r', 'w', or 'rw'
+    allPermissions   TEXT NOT NULL, -- either '', 'r', 'w', or 'rw'
+    -- owerID INT NOT NULL this is going to be the same as the userID
+    UNIQUE(ID),
+    UNIQUE(name, userID),
+    FOREIGN KEY (recSetPermGroupName) REFERENCES recordSetPermissionGroups (name),
+    FOREIGN KEY (userID) REFERENCES users (ID)
+);
+
+-- all the user groups and people in them.
+CREATE TABLE recordSetPermissionGroups (
+    name TEXT NOT NULL,
+    userID INT,
+    UNIQUE(name, userID),
+    FOREIGN KEY (userID) REFERENCES users (ID)
+);
+
+
+-- Set up initial users...
 INSERT INTO users(ID, username, password) VALUES (0, 'JohnDoe', 'pass');
 INSERT INTO users(ID, username, password) VALUES (1, 'MatthewRaison', 'ThisIsMyPassword');
 
-
-INSERT INTO recordValueStore VALUES (0, 1, null, null);
-INSERT INTO recordValueStore VALUES (1, 1, null, null);
-INSERT INTO recordValueStore VALUES (2, 1, null, null);
-INSERT INTO recordValueStore VALUES (3, 2, null, null);
-INSERT INTO recordValueStore VALUES (4, 3, null, null);
+-- Set up initial user groups...
+INSERT INTO recordSetPermissionGroups (name, userID) VALUES ('DEVELOPER', 0);
+INSERT INTO recordSetPermissionGroups (name, userID) VALUES ('DEVELOPER', 1);
 
 
-INSERT INTO recordValueStore VALUES (5, null, null, 0.9);
-INSERT INTO recordValueStore VALUES (6, null, null, 0.8);
-INSERT INTO recordValueStore VALUES (7, null, null, 0.5);
+-- First thing first we need to create a record set to put our measurements:
+INSERT INTO recordSet (
+    ID,
+    name,
+    userID,
+    recSetPermGroupName,
+    ownerPermissions,
+    groupPermissions,
+    allPermissions
+) VALUES (0, 'test set A', 1, 'DEVELOPER', 'rw', 'r', '');
+-- Now we can record stuff and add them to this set.
+-- Create the values...
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (0, 1, null, null);
+-- Add in measurement metadata that makes this an actual measurement.
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (0, 1557453366, 'meters', 0, 'Test metric record in meters.');
+-- Now join it to the record set
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 0);
+
+-- Repeat
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (1, 1, null, null);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (1, 1557453426, 'meters', 1, 'Test metric record in meters.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 1);
+
+-- Repeat
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (2, 1, null, null);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (2, 1557453456, 'meters', 2, 'Test metric record in meters.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 2);
 
 
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (0, 1557453366, 'meters', 0, 'Test metric record in meters.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (1, 1557453426, 'meters', 1, 'Test metric record in meters.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (2, 1557453458, 'meters', 2, 'Test metric record in meters.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (3, 1557453366, 'feet', 3, 'Test metric record in feet.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (4, 1557453426, 'feet', 4, 'Test metric record in feet.');
 
 
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (5, 1557453366, 'percentage', 5, 'Test metric record in percentage.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (6, 1557453426, 'percentage', 6, 'Test metric record in percentage.');
-INSERT INTO records(ID, unixTime, metricUnits, metricValueIDPointer, notes)
-    VALUES (7, 1557453458, 'percentage', 7, 'Test metric record in percentage.');
+-- First thing first we need to create a record set to put our measurements:
+INSERT INTO recordSet (
+    ID,
+    name,
+    userID,
+    recSetPermGroupName,
+    ownerPermissions,
+    groupPermissions,
+    allPermissions
+) VALUES (1, 'test set B', 1, 'DEVELOPER', 'rw', 'r', '');
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (3, null, null, 0.20);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (3, 1557453366, 'percentage', 3, 'Heart rate cap.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 3);
 
+-- Repeat
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (4, null, null, 0.22);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (4, 1557453426, 'percentage', 4, 'Heart rate cap.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 4);
 
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (0, 'How far can I throw a base ball', 0, 0);
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (1, 'How far can I throw a base ball', 0, 1);
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (2, 'How far can I throw a base ball', 0, 2);
+-- Repeat
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (5, null, null, 0.30);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (5, 1557453456, 'percentage', 5, 'Heart rate cap.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 5);
 
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (3, 'Sunflow Growth', 0, 3);
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (4, 'Sunflow Growth', 0, 4);
-
-
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (5, 'Heart Rate Cap.', 1, 5);
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (6, 'Heart Rate Cap.', 1, 6);
-INSERT INTO recordTagGroups(ID, tagGroupName, userID, recordIDPointer)
-    VALUES (7, 'Heart Rate Cap.', 1, 7);
+INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (6, null, null, 0.52);
+INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (6, 1557453456, 'percentage', 6, 'Heart rate cap.');
+INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 6);
