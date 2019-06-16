@@ -81,8 +81,8 @@ def create_app(test_config=None):
         expose_headers=['Content-Type', 'Authorization'])
 
     @app.route('/users/<int:userID>/points', methods=['POST'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    # @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def record_point(userID):
         # print(request, file=sys.stderr)
         # print(request, file=sys.stdout)
@@ -117,7 +117,7 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
             valresult = cursor.execute(
-                'INSERT INTO recordValueStore (intVal, strVal, floatVal) '
+                'INSERT INTO measurementValueStore (intVal, strVal, floatVal) '
                 'VALUES(?, ?, ?)',
                 (valueInt, valueString, valueReal,)
             )
@@ -125,7 +125,7 @@ def create_app(test_config=None):
             db.get_db().commit()
 
             recordresult = cursor.execute(
-                'INSERT INTO records (unixTime, metricUnits, metricValueIDPointer, notes) '
+                'INSERT INTO measurements (unixTime, units, measurementValueStoreID, notes) '
                 'VALUES(?, ?, ?, ?)',
                 (int(time), units, valueID, notes,)
             )
@@ -135,11 +135,16 @@ def create_app(test_config=None):
             tagUpdates = []
             for tag in tags:
                 tagResults = cursor.execute(
-                    'INSERT INTO recordTagGroups (tagGroupName, userID, recordIDPointer) '
-                    'VALUES(?, ?, ?)',
-                    (str(tag), userID, recordID,)
+                    'INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) '
+                    ## this sort of works...but it means we can't have anything at the 0th index.
+                    ## also the measurement will still be made. I'll need to convert this to one transaction. for now skip it.
+                    'SELECT (CASE WHEN ID > 0 THEN ID ELSE NULL END) AS recordSetID, ? AS measurementsID FROM recordSet '
+                    'WHERE name = ? AND userID = ? ',
+                    (recordID, str(tag), userID,)
                 )
-                tagUpdates.append(tagResults.lastrowid)
+
+                if tagResults.rowcount == 1:
+                    tagUpdates.append(tagResults.lastrowid)
 
             cursor.close()
             db.get_db().commit()
@@ -153,13 +158,15 @@ def create_app(test_config=None):
             return jsonify({'error_detail': 'Failed to record point.'}), 404
 
         data = {
-            'ID': valueID
+            'ID': valueID,
+            # 'measurement': recordID,
+            # 'groupdata': tagUpdates
         }
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    # @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def search_points(userID):
         tagsInput = request.args.get('tags')
         tags = tagsInput.split(',') if not tagsInput is None else None
@@ -167,37 +174,38 @@ def create_app(test_config=None):
         timeEnd = request.args.get('timeEnd')
         tagWhereClause = ''
         if tags:
-            tagWhereClause = 'AND (rtg.tagGroupName LIKE \'' + '\' OR rtg.tagGroupName LIKE \''.join(tags) + '\') '
+            tagWhereClause = 'AND (\''.join(tags) + '\' LIKE \'%\' + rtg.name + \'%\' ) '
 
         timeWhereClause = ''
         if timeStart and timeEnd:
-            timeWhereClause = 'AND (r.unixTime >= ' + str(timeStart) + ' AND r.unixTime <= ' + str(timeEnd) + ') '
+            timeWhereClause = 'AND (m.unixTime >= ' + str(timeStart) + ' AND m.unixTime <= ' + str(timeEnd) + ') '
 
         try:
             cursor = db.get_db().cursor()
             result = cursor.execute(
                 'SELECT '
-                '   rvs.ID as ID, '
-                '   r.unixTime AS time, '
-                '   r.metricUnits AS units, '
-                '   rvs.intVal AS valueInt, '
-                '   rvs.strVal AS valueStr, '
-                '   rvs.floatVal AS valueReal, '
-                '   r.notes AS notes, '
-                '   Group_Concat(rtg.tagGroupName, \',\') AS tags '
-                'FROM recordValueStore rvs '
-                'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
-                'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '
+                '   mvs.ID as ID, '
+                '   m.unixTime AS time, '
+                '   m.units AS units, '
+                '   mvs.intVal AS valueInt, '
+                '   mvs.strVal AS valueStr, '
+                '   mvs.floatVal AS valueReal, '
+                '   m.notes AS notes, '
+                '   Group_Concat(rtg.name, \',\') AS tags '
+                'FROM measurementValueStore mvs '
+                'INNER JOIN measurements m ON mvs.ID = m.measurementValueStoreID '
+                'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
+                'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
                 'WHERE rtg.userID = ? '
                 '%s '
                 '%s '
                 'GROUP BY '
-                '   r.unixTime, '
-                '   r.metricUnits, '
-                '   rvs.intVal, '
-                '   rvs.strVal, '
-                '   rvs.floatVal, '
-                '   r.notes' % (tagWhereClause, timeWhereClause),
+                '   m.unixTime, '
+                '   m.units, '
+                '   mvs.intVal, '
+                '   mvs.strVal, '
+                '   mvs.floatVal, '
+                '   m.notes' % (tagWhereClause, timeWhereClause),
                 (userID,)
             ).fetchall()
 
@@ -218,33 +226,34 @@ def create_app(test_config=None):
         return jsonify(response_data), 200
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    # @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def get_point(userID, pointID):
         try:
             cursor = db.get_db().cursor()
 
             result = cursor.execute(
                 'SELECT '
-                '   rvs.ID as ID, '
-                '   r.unixTime AS time, '
-                '   r.metricUnits AS units, '
-                '   rvs.intVal AS valueInt, '
-                '   rvs.strVal AS valueStr, '
-                '   rvs.floatVal AS valueReal, '
-                '   r.notes AS notes, '
-                '   Group_Concat(rtg.tagGroupName) AS tags '
-                'FROM recordValueStore rvs '
-                'INNER JOIN records r ON rvs.ID = r.metricValueIDPointer '
-                'INNER JOIN recordTagGroups rtg ON r.ID = rtg.recordIDPointer '
-                'WHERE rtg.userID = ? AND rvs.ID = ? '
+                '   mvs.ID as ID, '
+                '   m.unixTime AS time, '
+                '   m.units AS units, '
+                '   mvs.intVal AS valueInt, '
+                '   mvs.strVal AS valueStr, '
+                '   mvs.floatVal AS valueReal, '
+                '   m.notes AS notes, '
+                '   Group_Concat(rtg.name) AS tags '
+                'FROM measurementValueStore mvs '
+                'INNER JOIN measurements m ON mvs.ID = m.measurementValueStoreID '
+                'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
+                'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
+                'WHERE rtg.userID = ? AND mvs.ID = ? '
                 'GROUP BY '
-                '   r.unixTime, '
-                '   r.metricUnits, '
-                '   rvs.intVal, '
-                '   rvs.strVal, '
-                '   rvs.floatVal, '
-                '   r.notes',
+                '   m.unixTime, '
+                '   m.units, '
+                '   mvs.intVal, '
+                '   mvs.strVal, '
+                '   mvs.floatVal, '
+                '   m.notes',
                 (userID, pointID,)
             ).fetchone()
 
@@ -263,8 +272,8 @@ def create_app(test_config=None):
     ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    # @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
     def delete_point(userID, pointID):
         # @todo just return the http response
         # @todo just return the http response
@@ -272,15 +281,15 @@ def create_app(test_config=None):
             cursor = db.get_db().cursor()
 
             result = cursor.execute(
-                'WITH record_set as ( '
-                '   SELECT DISTINCT rtg.ID as rtg_id ' ## , r.ID as r_id, rvs.ID as rvs_id
-                '   FROM recordTagGroups rtg '
-                '   INNER JOIN records r ON rtg.recordIDPointer = r.ID '
-                '   INNER JOIN recordValueStore rvs ON r.metricValueIDPointer = rvs.ID '
-                '   WHERE rtg.userID = ? AND rvs.ID = ? '
-                ') '
-                'DELETE FROM recordTagGroups '
-                'WHERE ID in (SELECT rtg_id FROM record_set);'
+                # 'WITH record_set as ( '
+                # '   SELECT DISTINCT rtg.ID as rtg_id ' ## , r.ID as r_id, rvs.ID as rvs_id
+                # '   FROM joinMeasurementsToRecordSet rtg '
+                # '   INNER JOIN measurements r ON rtg.recordIDPointer = r.ID '
+                # '   INNER JOIN measurementValueStore rvs ON r.metricValueIDPointer = rvs.ID '
+                # '   WHERE rtg.userID = ? AND rvs.ID = ? '
+                # ') '
+                # 'DELETE FROM joinMeasurementsToRecordSet '
+                # 'WHERE ID in (SELECT rtg_id FROM record_set);'
                 ,
                 (userID, pointID,)
             )
@@ -290,11 +299,11 @@ def create_app(test_config=None):
             result = cursor.execute(
                 'WITH record_set as ( '
                 '   SELECT DISTINCT r.ID as r_id '
-                '   FROM records r '
-                '   INNER JOIN recordValueStore rvs ON r.metricValueIDPointer = rvs.ID '
+                '   FROM measurements r '
+                '   INNER JOIN measurementValueStore rvs ON r.metricValueIDPointer = rvs.ID '
                 '   WHERE rvs.ID = ? '
                 ') '
-                'DELETE FROM records '
+                'DELETE FROM measurements '
                 'WHERE ID in (SELECT r_id FROM record_set);'
                 ,
                 (pointID,)
@@ -304,10 +313,10 @@ def create_app(test_config=None):
             result = cursor.execute(
                 'WITH record_set as ( '
                 '   SELECT DISTINCT rvs.ID as rvs_id'
-                '   FROM recordValueStore rvs '
+                '   FROM measurementValueStore rvs '
                 '   WHERE rvs.ID = ? '
                 ') '
-                'DELETE FROM recordValueStore '
+                'DELETE FROM measurementValueStore '
                 'WHERE ID in (SELECT rvs_id FROM record_set);'
                 ,
                 (pointID,)
