@@ -81,8 +81,8 @@ def create_app(test_config=None):
         expose_headers=['Content-Type', 'Authorization'])
 
     @app.route('/users/<int:userID>/points', methods=['POST'])
-    # @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def record_point(userID):
         # print(request, file=sys.stderr)
         # print(request, file=sys.stdout)
@@ -95,7 +95,7 @@ def create_app(test_config=None):
             value = req_data['value'] # mixed
             notes = req_data['notes'] # string
             tags = [] if req_data['tags'] is None else req_data['tags'].split(',') # []string
-            tags.append(None) ## ensure the null group exists
+            tags.append('null') ## ensure the null group exists
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
 
@@ -116,29 +116,19 @@ def create_app(test_config=None):
 
         try:
             cursor = db.get_db().cursor()
-            valresult = cursor.execute(
-                'INSERT INTO measurementValueStore (intVal, strVal, floatVal) '
-                'VALUES(?, ?, ?)',
-                (valueInt, valueString, valueReal,)
-            )
-            valueID = valresult.lastrowid
-            db.get_db().commit()
-
             recordresult = cursor.execute(
-                'INSERT INTO measurements (unixTime, units, measurementValueStoreID, notes) '
-                'VALUES(?, ?, ?, ?)',
-                (int(time), units, valueID, notes,)
+                'INSERT INTO measurements (unixTime, units, intVal, strVal, floatVal, notes) '
+                'VALUES(?, ?, ?, ?, ?, ?)',
+                (int(time), units, valueInt, valueString, valueReal, notes,)
             )
             recordID = recordresult.lastrowid
-            db.get_db().commit()
 
             tagUpdates = []
             for tag in tags:
+                ## This now works but it will leave points lingering around disjoint from any groups if no groups match.
                 tagResults = cursor.execute(
                     'INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) '
-                    ## this sort of works...but it means we can't have anything at the 0th index.
-                    ## also the measurement will still be made. I'll need to convert this to one transaction. for now skip it.
-                    'SELECT (CASE WHEN ID > 0 THEN ID ELSE NULL END) AS recordSetID, ? AS measurementsID FROM recordSet '
+                    'SELECT (CASE WHEN ID > 0 THEN ID ELSE NULL END) AS recordSetID, (CASE WHEN ID > 0 THEN ? ELSE NULL END) AS measurementsID FROM recordSet '
                     'WHERE name = ? AND userID = ? ',
                     (recordID, str(tag), userID,)
                 )
@@ -146,8 +136,8 @@ def create_app(test_config=None):
                 if tagResults.rowcount == 1:
                     tagUpdates.append(tagResults.lastrowid)
 
-            cursor.close()
             db.get_db().commit()
+            cursor.close()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
         ############################
@@ -158,15 +148,13 @@ def create_app(test_config=None):
             return jsonify({'error_detail': 'Failed to record point.'}), 404
 
         data = {
-            'ID': valueID,
-            # 'measurement': recordID,
-            # 'groupdata': tagUpdates
+            'ID': recordID,
         }
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/points', methods=['GET'])
-    # @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def search_points(userID):
         tagsInput = request.args.get('tags')
         tags = tagsInput.split(',') if not tagsInput is None else None
@@ -184,16 +172,15 @@ def create_app(test_config=None):
             cursor = db.get_db().cursor()
             result = cursor.execute(
                 'SELECT '
-                '   mvs.ID as ID, '
+                '   m.ID as ID, '
                 '   m.unixTime AS time, '
                 '   m.units AS units, '
-                '   mvs.intVal AS valueInt, '
-                '   mvs.strVal AS valueStr, '
-                '   mvs.floatVal AS valueReal, '
+                '   m.intVal AS valueInt, '
+                '   m.strVal AS valueStr, '
+                '   m.floatVal AS valueReal, '
                 '   m.notes AS notes, '
                 '   Group_Concat(rtg.name, \',\') AS tags '
-                'FROM measurementValueStore mvs '
-                'INNER JOIN measurements m ON mvs.ID = m.measurementValueStoreID '
+                'FROM measurements m '
                 'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
                 'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
                 'WHERE rtg.userID = ? '
@@ -202,9 +189,9 @@ def create_app(test_config=None):
                 'GROUP BY '
                 '   m.unixTime, '
                 '   m.units, '
-                '   mvs.intVal, '
-                '   mvs.strVal, '
-                '   mvs.floatVal, '
+                '   m.intVal, '
+                '   m.strVal, '
+                '   m.floatVal, '
                 '   m.notes' % (tagWhereClause, timeWhereClause),
                 (userID,)
             ).fetchall()
@@ -226,33 +213,32 @@ def create_app(test_config=None):
         return jsonify(response_data), 200
 
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
-    # @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def get_point(userID, pointID):
         try:
             cursor = db.get_db().cursor()
 
             result = cursor.execute(
                 'SELECT '
-                '   mvs.ID as ID, '
+                '   m.ID as ID, '
                 '   m.unixTime AS time, '
                 '   m.units AS units, '
-                '   mvs.intVal AS valueInt, '
-                '   mvs.strVal AS valueStr, '
-                '   mvs.floatVal AS valueReal, '
+                '   m.intVal AS valueInt, '
+                '   m.strVal AS valueStr, '
+                '   m.floatVal AS valueReal, '
                 '   m.notes AS notes, '
                 '   Group_Concat(rtg.name) AS tags '
-                'FROM measurementValueStore mvs '
-                'INNER JOIN measurements m ON mvs.ID = m.measurementValueStoreID '
+                'FROM measurements m '
                 'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
                 'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
-                'WHERE rtg.userID = ? AND mvs.ID = ? '
+                'WHERE rtg.userID = ? AND m.ID = ? '
                 'GROUP BY '
                 '   m.unixTime, '
                 '   m.units, '
-                '   mvs.intVal, '
-                '   mvs.strVal, '
-                '   mvs.floatVal, '
+                '   m.intVal, '
+                '   m.strVal, '
+                '   m.floatVal, '
                 '   m.notes',
                 (userID, pointID,)
             ).fetchone()
@@ -272,8 +258,8 @@ def create_app(test_config=None):
     ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
-    # @check_jwt(app.config['SECRET_KEY'])
-    # @verify_user()
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
     def delete_point(userID, pointID):
         # @todo just return the http response
         # @todo just return the http response
@@ -281,48 +267,24 @@ def create_app(test_config=None):
             cursor = db.get_db().cursor()
 
             result = cursor.execute(
-                # 'WITH record_set as ( '
-                # '   SELECT DISTINCT rtg.ID as rtg_id ' ## , r.ID as r_id, rvs.ID as rvs_id
-                # '   FROM joinMeasurementsToRecordSet rtg '
-                # '   INNER JOIN measurements r ON rtg.recordIDPointer = r.ID '
-                # '   INNER JOIN measurementValueStore rvs ON r.metricValueIDPointer = rvs.ID '
-                # '   WHERE rtg.userID = ? AND rvs.ID = ? '
-                # ') '
-                # 'DELETE FROM joinMeasurementsToRecordSet '
-                # 'WHERE ID in (SELECT rtg_id FROM record_set);'
+                'DELETE FROM joinMeasurementsToRecordSet '
+                'WHERE measurementsID = ? AND '
+                'recordSetID in ('
+                'SELECT ID FROM recordSet WHERE userID = ?'
+                ')'
                 ,
-                (userID, pointID,)
+                (pointID, userID,)
             )
-            # cursor.close()
-            db.get_db().commit()
+            # db.get_db().commit()
 
             result = cursor.execute(
-                'WITH record_set as ( '
-                '   SELECT DISTINCT r.ID as r_id '
-                '   FROM measurements r '
-                '   INNER JOIN measurementValueStore rvs ON r.metricValueIDPointer = rvs.ID '
-                '   WHERE rvs.ID = ? '
-                ') '
                 'DELETE FROM measurements '
-                'WHERE ID in (SELECT r_id FROM record_set);'
+                'WHERE ID = ?'
                 ,
                 (pointID,)
             )
             db.get_db().commit()
-
-            result = cursor.execute(
-                'WITH record_set as ( '
-                '   SELECT DISTINCT rvs.ID as rvs_id'
-                '   FROM measurementValueStore rvs '
-                '   WHERE rvs.ID = ? '
-                ') '
-                'DELETE FROM measurementValueStore '
-                'WHERE ID in (SELECT rvs_id FROM record_set);'
-                ,
-                (pointID,)
-            )
             cursor.close()
-            db.get_db().commit()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 

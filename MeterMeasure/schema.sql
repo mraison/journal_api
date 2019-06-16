@@ -3,7 +3,6 @@
 
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS measurements;
-DROP TABLE IF EXISTS measurementValueStore;
 DROP TABLE IF EXISTS joinMeasurementsToRecordSet;
 DROP TABLE IF EXISTS recordSet;
 DROP TABLE IF EXISTS recordSetPermissionGroups;
@@ -24,19 +23,11 @@ CREATE TABLE measurements (
   units TEXT NOT NULL, -- The is the units we're measuring in. This could be anything like lbs to percentages.
   -- I want flexibility in how I'm recording so I'm going to have this point to a separate "values" table.
   -- This table will include columns for the different data types: INT, TEXT, and REAL
-  measurementValueStoreID INT NOT NULL,
+  intVal INT,
+  strVal TEXT,
+  floatVal REAL,
   notes TEXT,
-  FOREIGN KEY (measurementValueStoreID) REFERENCES measurementValueStore (ID),
-  UNIQUE(measurementValueStoreID),
   UNIQUE(ID)
-);
-
--- measurement values
-CREATE TABLE measurementValueStore (
-    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-    intVal INT,
-    strVal TEXT,
-    floatVal REAL
 );
 
 -- data point series definition
@@ -106,20 +97,18 @@ INSERT INTO recordSet (
 ) VALUES (0, 'test set A', 1, 'DEVELOPER', 'rw', 'r', '');
 -- Now we can record stuff and add them to this set.
 -- Create the values...
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (0, 1, null, null);
+
 -- Add in measurement metadata that makes this an actual measurement.
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (0, 1557453366, 'meters', 0, 'Test metric record in meters.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (0, 1557453366, 'meters', 1, null, null, 'Test metric record in meters.');
 -- Now join it to the record set
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 0);
 
 -- Repeat
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (1, 1, null, null);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (1, 1557453426, 'meters', 1, 'Test metric record in meters.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (1, 1557453426, 'meters', 1, null, null, 'Test metric record in meters.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 1);
 
 -- Repeat
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (2, 1, null, null);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (2, 1557453456, 'meters', 2, 'Test metric record in meters.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (2, 1557453456, 'meters', 1, null, null, 'Test metric record in meters.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (0, 2);
 
 
@@ -135,20 +124,16 @@ INSERT INTO recordSet (
     groupPermissions,
     allPermissions
 ) VALUES (1, 'test set B', 1, 'DEVELOPER', 'rw', 'r', '');
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (3, null, null, 0.20);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (3, 1557453366, 'percentage', 3, 'Heart rate cap.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (3, 1557453366, 'percentage', null, null, 0.20, 'Heart rate cap.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 3);
 
 -- Repeat
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (4, null, null, 0.22);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (4, 1557453426, 'percentage', 4, 'Heart rate cap.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (4, 1557453426, 'percentage', null, null, 0.22, 'Heart rate cap.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 4);
 
 -- Repeat
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (5, null, null, 0.30);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (5, 1557453456, 'percentage', 5, 'Heart rate cap.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (5, 1557453456, 'percentage', null, null, 0.30, 'Heart rate cap.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 5);
 
-INSERT INTO measurementValueStore (ID, intVal, strVal, floatVal) VALUES (6, null, null, 0.52);
-INSERT INTO measurements (ID, unixTime, units, measurementValueStoreID, notes) VALUES (6, 1557453456, 'percentage', 6, 'Heart rate cap.');
+INSERT INTO measurements (ID, unixTime, units, intVal, strVal, floatVal, notes) VALUES (6, 1557453456, 'percentage', null, null, 0.52, 'Heart rate cap.');
 INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) VALUES (1, 6);
