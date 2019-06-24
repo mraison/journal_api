@@ -37,12 +37,6 @@ CREATE TABLE joinMeasurementsToRecordSet (
     FOREIGN KEY (measurementsID) REFERENCES measurements (ID),
     FOREIGN KEY (recordSetID) REFERENCES recordSet (ID),
     UNIQUE(recordSetID, measurementsID)
-    -- any point can only be included in a group once. (no repetition of measurement instances.)
---    UNIQUE(userID, tagGroupName)
---    UNIQUE(recordIDPointer) -- I'm going to leave this requirement out for the time being.
--- In most cases you'll want only one record set to be associated with a group of measurements unless for example when
--- the subject you are measuring is part of a larger set of things to be measured. I.E. if you measure your height and want to track
--- both your height over time and people height over time generally.
 );
 
 -- sets of points for a users records.
