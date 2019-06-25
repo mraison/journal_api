@@ -3,8 +3,10 @@ import os
 from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
 import sys
+import urllib.parse
 import re
 from . import db
+import click
 
 from .shared.middleware.jwt import check_jwt
 from .shared.configs.serviceConsts import SECRET
@@ -125,7 +127,8 @@ def create_app(test_config=None):
 
             tagUpdates = []
             for tag in tags:
-                ## This now works but it will leave points lingering around disjoint from any groups if no groups match.
+                ## @todo create new record set if a tag specified is not already defined as a record set.
+                ## the surface the record sets as editable files to the user.
                 tagResults = cursor.execute(
                     'INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) '
                     'SELECT (CASE WHEN ID > 0 THEN ID ELSE NULL END) AS recordSetID, (CASE WHEN ID > 0 THEN ? ELSE NULL END) AS measurementsID FROM recordSet '
@@ -157,12 +160,15 @@ def create_app(test_config=None):
     @verify_user()
     def search_points(userID):
         tagsInput = request.args.get('tags')
-        tags = tagsInput.split(',') if not tagsInput is None else None
+        tags = urllib.parse.unquote(tagsInput) if not tagsInput is None else None ## .split(',')
+        click.echo(tags)
         timeStart = request.args.get('timeStart')
         timeEnd = request.args.get('timeEnd')
         tagWhereClause = ''
         if tags:
-            tagWhereClause = 'AND (\''.join(tags) + '\' LIKE \'%\' + rtg.name + \'%\' ) '
+            # tagWhereClause = 'AND (\'' + tags + '\' LIKE \'%\' + rtg.name + \'%\' ) '
+            tagWhereClause = 'AND (\'' + tags + '\' LIKE rtg.name) '
+            click.echo(tagWhereClause)
 
         timeWhereClause = ''
         if timeStart and timeEnd:
@@ -183,7 +189,8 @@ def create_app(test_config=None):
                 'FROM measurements m '
                 'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
                 'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
-                'WHERE rtg.userID = ? '
+                'INNER JOIN recordSetPermissionGroups rspg ON rtg.recSetPermGroupName = rspg.name '
+                'WHERE rspg.userID = ? '
                 '%s '
                 '%s '
                 'GROUP BY '
