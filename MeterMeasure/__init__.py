@@ -82,6 +82,112 @@ def create_app(test_config=None):
         headers=['Content-Type', 'Authorization'],
         expose_headers=['Content-Type', 'Authorization'])
 
+    @app.route('/users/<int:userID>/recordSets', methods=['POST'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def create_record_set(userID):
+        req_data = request.get_json()
+
+        try:
+            name = req_data['name']
+            recSetPermGroupName = req_data['permissionGroupName']
+            ownerPermissions = 'rw'
+            groupPermissions = req_data['groupPermissionsActions']
+            allPermissions = req_data['globalPermissionsActions']
+        except KeyError:
+            return jsonify({'error_detail': 'Missing required field'}), 400
+
+        ############################
+        #    Function specific stuff start.
+        ############################
+        # cast values to record
+
+        try:
+            cursor = db.get_db().cursor()
+            recordresult = cursor.execute(
+                'INSERT INTO recordSet (name, userID, recSetPermGroupName, ownerPermissions, groupPermissions, allPermissions) '
+                'VALUES(?, ?, ?, ?, ?, ?)',
+                (name, userID, recSetPermGroupName, ownerPermissions, groupPermissions, allPermissions)
+            )
+            recordSetID = recordresult.lastrowid
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
+
+        if recordresult.rowcount == 0:
+            return jsonify({'error_detail': 'Failed to delete point.'}), 504
+
+        data = {
+            'ID': recordSetID,
+        }
+        return jsonify(data), 200
+
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>', methods=['GET'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def get_record_set(userID, recordSetID):
+        try:
+            cursor = db.get_db().cursor()
+            results = cursor.execute(
+                'SELECT * FROM recordSet '
+                'WHERE ID = ? AND userID = ? ',
+                (recordSetID, userID)
+            ).fetchall()
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
+
+        data = [dict(zip([key[0] for key in cursor.description], row)) for row in results]
+        if len(data) == 0:
+            return jsonify({'error_detail': 'No points found'}), 404
+
+        return jsonify(data), 200
+
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>', methods=['PUT'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def update_record_set(userID, recordSetID):
+        req_data = request.get_json()
+
+        try:
+            name = req_data['name']
+            recSetPermGroupName = req_data['permissionGroupName']
+            groupPermissions = req_data['groupPermissionsActions']
+            allPermissions = req_data['globalPermissionsActions']
+        except KeyError:
+            return jsonify({'error_detail': 'Missing required field'}), 400
+
+        ############################
+        #    Function specific stuff start.
+        ############################
+        # cast values to record
+
+        try:
+            cursor = db.get_db().cursor()
+            recordresult = cursor.execute(
+                'UPDATE recordSet '
+                'SET name = ?, '
+                'recSetPermGroupName = ?, '
+                'groupPermissions = ?, '
+                'allPermissions = ? '
+                'WHERE ID = ? AND userID = ? ',
+                (name, recSetPermGroupName, groupPermissions, allPermissions, recordSetID, userID)
+            )
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
+
+        if recordresult.rowcount == 0:
+            return jsonify({'error_detail': 'No record set found.'}), 404
+
+        return jsonify(), 200
+
     @app.route('/users/<int:userID>/points', methods=['POST'])
     @check_jwt(app.config['SECRET_KEY'])
     @verify_user()

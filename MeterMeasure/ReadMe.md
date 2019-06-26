@@ -19,5 +19,8 @@ filter by tag:
 curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/points?tags=Heart%20Rate%20Cap.
 
 
+creating recordSets:
+curl -X POST -d "{\"name\": \"test_record_set\", \"permissionGroupName\": \"DEVELOPER\", \"groupPermissionsActions\": \"r\", \"globalPermissionsActions\": \"\"}" -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets
+curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets/0
 
 FOR GROUP DEFINITIONS:
