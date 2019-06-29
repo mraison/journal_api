@@ -124,6 +124,29 @@ def create_app(test_config=None):
         }
         return jsonify(data), 200
 
+    @app.route('/users/<int:userID>/recordSets', methods=['GET'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def get_all_record_sets(userID):
+        try:
+            cursor = db.get_db().cursor()
+            results = cursor.execute(
+                'SELECT * FROM recordSet '
+                'WHERE userID = ? ',
+                (userID,)
+            ).fetchall()
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
+
+        data = [dict(zip([key[0] for key in cursor.description], row)) for row in results]
+        if len(data) == 0:
+            return jsonify({'error_detail': 'No points found'}), 404
+
+        return jsonify(data), 200
+
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
     @verify_user()
@@ -188,10 +211,43 @@ def create_app(test_config=None):
 
         return jsonify(), 200
 
-    @app.route('/users/<int:userID>/points', methods=['POST'])
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
     @verify_user()
-    def record_point(userID):
+    def get_measurements(userID, recordSetID):
+        ## MeasurementID will be unique across the whole database so we can just do a simple select on the measurement table.
+        ## No need for joining on the record set other than to esnure user's don't try to grab points from other sets off this endpoint.
+        try:
+            cursor = db.get_db().cursor()
+            results = cursor.execute(
+                'SELECT m.* FROM measurements m '
+                'inner join joinMeasurementsToRecordSet mjr on m.ID = mjr.measurementsID '
+                'inner join recordSet r ON mjr.recordSetID = r.ID '
+                'WHERE r.ID = ?',
+                (recordSetID,)
+            ).fetchall()
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
+
+        data = [dict(zip([key[0] for key in cursor.description], row)) for row in results]
+        if len(data) == 0:
+            return jsonify({'error_detail': 'No points found'}), 404
+
+        def df(d):
+            d['value'] = choose_between_value_types(d['intVal'], d['floatVal'], d['strVal'])
+            return d
+
+        response_data = [df(d) for d in data]
+
+        return jsonify(response_data), 200
+
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements', methods=['POST'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def record_measurement(userID, recordSetID):
         # print(request, file=sys.stderr)
         # print(request, file=sys.stdout)
         # @todo just return the http response
@@ -202,8 +258,6 @@ def create_app(test_config=None):
             units = req_data['units'] # string
             value = req_data['value'] # mixed
             notes = req_data['notes'] # string
-            tags = [] if req_data['tags'] is None else req_data['tags'].split(',') # []string
-            tags.append('null') ## ensure the null group exists
         except KeyError:
             return jsonify({'error_detail': 'Missing required field'}), 400
 
@@ -229,21 +283,19 @@ def create_app(test_config=None):
                 'VALUES(?, ?, ?, ?, ?, ?)',
                 (int(time), units, valueInt, valueString, valueReal, notes,)
             )
-            recordID = recordresult.lastrowid
+            pointID = recordresult.lastrowid
 
-            tagUpdates = []
-            for tag in tags:
-                ## @todo create new record set if a tag specified is not already defined as a record set.
-                ## the surface the record sets as editable files to the user.
-                tagResults = cursor.execute(
-                    'INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) '
-                    'SELECT (CASE WHEN ID > 0 THEN ID ELSE NULL END) AS recordSetID, (CASE WHEN ID > 0 THEN ? ELSE NULL END) AS measurementsID FROM recordSet '
-                    'WHERE name = ? AND userID = ? ',
-                    (recordID, str(tag), userID,)
-                )
+            if recordresult.rowcount == 0:
+                return jsonify({'error_detail': 'Failed to create measurement'}), 504
 
-                if tagResults.rowcount == 1:
-                    tagUpdates.append(tagResults.lastrowid)
+            joinResult = cursor.execute(
+                'INSERT INTO joinMeasurementsToRecordSet (recordSetID, measurementsID) '
+                'VALUES(?, ?)',
+                (recordSetID, pointID,)
+            )
+
+            if joinResult.rowcount == 0:
+                return jsonify({'error_detail': 'Failed to add measurement to record set. Disjoint measurement created: ID - %s.' % pointID}), 504
 
             db.get_db().commit()
             cursor.close()
@@ -253,157 +305,136 @@ def create_app(test_config=None):
         #    Function specific stuff end.
         ############################
 
-        if len(tagUpdates) == 0:
-            return jsonify({'error_detail': 'Failed to record point.'}), 404
-
         data = {
-            'ID': recordID,
+            'ID': pointID,
         }
         return jsonify(data), 200
 
-    @app.route('/users/<int:userID>/points', methods=['GET'])
+
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements/<int:measurementID>', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
     @verify_user()
-    def search_points(userID):
-        tagsInput = request.args.get('tags')
-        tags = urllib.parse.unquote(tagsInput) if not tagsInput is None else None ## .split(',')
-        click.echo(tags)
-        timeStart = request.args.get('timeStart')
-        timeEnd = request.args.get('timeEnd')
-        tagWhereClause = ''
-        if tags:
-            # tagWhereClause = 'AND (\'' + tags + '\' LIKE \'%\' + rtg.name + \'%\' ) '
-            tagWhereClause = 'AND (\'' + tags + '\' LIKE rtg.name) '
-            click.echo(tagWhereClause)
-
-        timeWhereClause = ''
-        if timeStart and timeEnd:
-            timeWhereClause = 'AND (m.unixTime >= ' + str(timeStart) + ' AND m.unixTime <= ' + str(timeEnd) + ') '
-
+    def get_measurement(userID, recordSetID, measurementID):
+        ## MeasurementID will be unique across the whole database so we can just do a simple select on the measurement table.
+        ## No need for joining on the record set other than to esnure user's don't try to grab points from other sets off this endpoint.
         try:
             cursor = db.get_db().cursor()
-            result = cursor.execute(
-                'SELECT '
-                '   m.ID as ID, '
-                '   m.unixTime AS time, '
-                '   m.units AS units, '
-                '   m.intVal AS valueInt, '
-                '   m.strVal AS valueStr, '
-                '   m.floatVal AS valueReal, '
-                '   m.notes AS notes, '
-                '   Group_Concat(rtg.name, \',\') AS tags '
-                'FROM measurements m '
-                'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
-                'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
-                'INNER JOIN recordSetPermissionGroups rspg ON rtg.recSetPermGroupName = rspg.name '
-                'WHERE rspg.userID = ? '
-                '%s '
-                '%s '
-                'GROUP BY '
-                '   m.unixTime, '
-                '   m.units, '
-                '   m.intVal, '
-                '   m.strVal, '
-                '   m.floatVal, '
-                '   m.notes' % (tagWhereClause, timeWhereClause),
-                (userID,)
+            results = cursor.execute(
+                'SELECT m.* FROM measurements m '
+                'inner join joinMeasurementsToRecordSet mjr on m.ID = mjr.measurementsID '
+                'inner join recordSet r ON mjr.recordSetID = r.ID '
+                'WHERE r.ID = ? AND m.ID = ? ',
+                (recordSetID, measurementID,)
             ).fetchall()
 
-            cursor.close()
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        data = [dict(zip([key[0] for key in cursor.description], row)) for row in result]
-        if len(data) == 0:
-            return jsonify({'error_detail': 'No points found'}), 404
-
-        def df(d):
-            d['value'] = choose_between_value_types(d['valueInt'], d['valueReal'], d['valueStr'])
-            return d
-
-        response_data = [df(d) for d in data]
-
-        return jsonify(response_data), 200
-
-    @app.route('/users/<int:userID>/points/<int:pointID>', methods=['GET'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
-    def get_point(userID, pointID):
-        try:
-            cursor = db.get_db().cursor()
-
-            result = cursor.execute(
-                'SELECT '
-                '   m.ID as ID, '
-                '   m.unixTime AS time, '
-                '   m.units AS units, '
-                '   m.intVal AS valueInt, '
-                '   m.strVal AS valueStr, '
-                '   m.floatVal AS valueReal, '
-                '   m.notes AS notes, '
-                '   Group_Concat(rtg.name) AS tags '
-                'FROM measurements m '
-                'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
-                'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
-                'WHERE rtg.userID = ? AND m.ID = ? '
-                'GROUP BY '
-                '   m.unixTime, '
-                '   m.units, '
-                '   m.intVal, '
-                '   m.strVal, '
-                '   m.floatVal, '
-                '   m.notes',
-                (userID, pointID,)
-            ).fetchone()
-
-            cursor.close()
-        except Exception as e:
-            return jsonify({'error_detail': str(e)}), 400
-
-        if result is None:
-            return jsonify({'error_detail': 'Point not found'}), 404
-
-        data = dict(zip([key[0] for key in cursor.description], result))
-        data['value'] = choose_between_value_types(data['valueInt'], data['valueReal'], data['valueStr'])
-        ## choose_between_value_types
-        return jsonify(data), 200
-
-    ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
-    # it should be included in anyone elses groups...Initially I think it's safe to say no.
-    @app.route('/users/<int:userID>/points/<int:pointID>', methods=['DELETE'])
-    @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
-    def delete_point(userID, pointID):
-        # @todo just return the http response
-        # @todo just return the http response
-        try:
-            cursor = db.get_db().cursor()
-
-            result = cursor.execute(
-                'DELETE FROM joinMeasurementsToRecordSet '
-                'WHERE measurementsID = ? AND '
-                'recordSetID in ('
-                'SELECT ID FROM recordSet WHERE userID = ?'
-                ')'
-                ,
-                (pointID, userID,)
-            )
-            # db.get_db().commit()
-
-            result = cursor.execute(
-                'DELETE FROM measurements '
-                'WHERE ID = ?'
-                ,
-                (pointID,)
-            )
             db.get_db().commit()
             cursor.close()
         except Exception as e:
             return jsonify({'error_detail': str(e)}), 400
 
-        if result.rowcount == 0:
-            return jsonify({'error_detail': 'Failed to delete point.'}), 404
+        data = [dict(zip([key[0] for key in cursor.description], row)) for row in results]
+        if len(data) == 0:
+            return jsonify({'error_detail': 'No points found'}), 404
+
+        return jsonify(data[0]), 200
+
+    ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
+    # it should be included in anyone elses groups...Initially I think it's safe to say no.
+    @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements/<int:measurementID>', methods=['DELETE'])
+    @check_jwt(app.config['SECRET_KEY'])
+    @verify_user()
+    def delete_point(userID, recordSetID, measurementID):
+        # @todo just return the http response
+        # @todo just return the http response
+        try:
+            cursor = db.get_db().cursor()
+            result = cursor.execute(
+                'DELETE FROM measurements '
+                'WHERE ID = ?'
+                ,
+                (measurementID,)
+            )
+            if result.rowcount == 0:
+                return jsonify({'error_detail': 'Failed to delete point.'}), 504
+
+            result = cursor.execute(
+                'DELETE FROM joinMeasurementsToRecordSet '
+                'WHERE measurementsID = ? AND recordSetID = ?'
+                ,
+                (measurementID, recordSetID,)
+            )
+            if result.rowcount == 0:
+                return jsonify({'error_detail': 'Failed to null pointer from record set.'}), 504
+
+            db.get_db().commit()
+            cursor.close()
+        except Exception as e:
+            return jsonify({'error_detail': str(e)}), 400
 
         return jsonify({}), 200
+
+    # @app.route('/users/<int:userID>/points', methods=['GET'])
+    # @check_jwt(app.config['SECRET_KEY'])
+    # @verify_user()
+    # def search_points(userID, recordSetID):
+    #     tagsInput = request.args.get('tags')
+    #     tags = urllib.parse.unquote(tagsInput) if not tagsInput is None else None ## .split(',')
+    #     click.echo(tags)
+    #     timeStart = request.args.get('timeStart')
+    #     timeEnd = request.args.get('timeEnd')
+    #     tagWhereClause = ''
+    #     if tags:
+    #         # tagWhereClause = 'AND (\'' + tags + '\' LIKE \'%\' + rtg.name + \'%\' ) '
+    #         tagWhereClause = 'AND (\'' + tags + '\' LIKE rtg.name) '
+    #         click.echo(tagWhereClause)
+    #
+    #     timeWhereClause = ''
+    #     if timeStart and timeEnd:
+    #         timeWhereClause = 'AND (m.unixTime >= ' + str(timeStart) + ' AND m.unixTime <= ' + str(timeEnd) + ') '
+    #
+    #     try:
+    #         cursor = db.get_db().cursor()
+    #         result = cursor.execute(
+    #             'SELECT '
+    #             '   m.ID as ID, '
+    #             '   m.unixTime AS time, '
+    #             '   m.units AS units, '
+    #             '   m.intVal AS valueInt, '
+    #             '   m.strVal AS valueStr, '
+    #             '   m.floatVal AS valueReal, '
+    #             '   m.notes AS notes, '
+    #             '   Group_Concat(rtg.name, \',\') AS tags '
+    #             'FROM measurements m '
+    #             'INNER JOIN joinMeasurementsToRecordSet jmrs ON m.ID = jmrs.measurementsID '
+    #             'INNER JOIN recordSet rtg ON jmrs.recordSetID = rtg.ID '
+    #             'INNER JOIN recordSetPermissionGroups rspg ON rtg.recSetPermGroupName = rspg.name '
+    #             'WHERE rspg.userID = ? '
+    #             '%s '
+    #             '%s '
+    #             'GROUP BY '
+    #             '   m.unixTime, '
+    #             '   m.units, '
+    #             '   m.intVal, '
+    #             '   m.strVal, '
+    #             '   m.floatVal, '
+    #             '   m.notes' % (tagWhereClause, timeWhereClause),
+    #             (userID,)
+    #         ).fetchall()
+    #
+    #         cursor.close()
+    #     except Exception as e:
+    #         return jsonify({'error_detail': str(e)}), 400
+    #
+    #     data = [dict(zip([key[0] for key in cursor.description], row)) for row in result]
+    #     if len(data) == 0:
+    #         return jsonify({'error_detail': 'No points found'}), 404
+    #
+    #     def df(d):
+    #         d['value'] = choose_between_value_types(d['valueInt'], d['valueReal'], d['valueStr'])
+    #         return d
+    #
+    #     response_data = [df(d) for d in data]
+    #
+    #     return jsonify(response_data), 200
 
     return app

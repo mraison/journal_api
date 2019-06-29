@@ -21,6 +21,9 @@ curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhb
 
 creating recordSets:
 curl -X POST -d "{\"name\": \"test_record_set\", \"permissionGroupName\": \"DEVELOPER\", \"groupPermissionsActions\": \"r\", \"globalPermissionsActions\": \"\"}" -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets
-curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets/0
+curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets/3
 
+
+curl -X POST -H "Content-Type: application/json" -d "{\"notes\": \"Test metric record in percentage.\", \"time\": 1557453458, \"units\": \"percentage\", \"value\": \"50%\"}" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets/3/measurements
+curl -X GET -H "Content-Type: application/json;" -H "Authorization: Bearer eyJhbGciOiAiSFMyNTYifQ==.eyJJRCI6IDEsICJyb2xlIjogInVzZXIifQ==.aSheyqrdpcWzSU9WShYxSjoBZqaL779hadgXxLQ/grc=" http://127.0.0.1:8080/users/1/recordSets/3/measurements
 FOR GROUP DEFINITIONS:
