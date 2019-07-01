@@ -4,25 +4,19 @@ merged implementation of the cache provider
 the name cache was not chosen to ensure pluggy automatically
 ignores the external pytest-cache
 """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import json
 import os
 from collections import OrderedDict
 
 import attr
 import py
-import six
 
 import pytest
-from .compat import _PY2 as PY2
 from .pathlib import Path
 from .pathlib import resolve_from_str
 from .pathlib import rmtree
 
-README_CONTENT = u"""\
+README_CONTENT = """\
 # pytest cache directory #
 
 This directory contains data from the pytest's cache plugin,
@@ -42,7 +36,7 @@ Signature: 8a477f597d28d172789f06886806bc55
 
 
 @attr.s
-class Cache(object):
+class Cache:
     _cachedir = attr.ib(repr=False)
     _config = attr.ib(repr=False)
 
@@ -128,7 +122,7 @@ class Cache(object):
         if not cache_dir_exists_already:
             self._ensure_supporting_files()
         try:
-            f = path.open("wb" if PY2 else "w")
+            f = path.open("w")
         except (IOError, OSError):
             self.warn("cache could not write path {path}", path=path)
         else:
@@ -141,14 +135,14 @@ class Cache(object):
         readme_path.write_text(README_CONTENT)
 
         gitignore_path = self._cachedir.joinpath(".gitignore")
-        msg = u"# Created by pytest automatically.\n*"
+        msg = "# Created by pytest automatically.\n*"
         gitignore_path.write_text(msg, encoding="UTF-8")
 
         cachedir_tag_path = self._cachedir.joinpath("CACHEDIR.TAG")
         cachedir_tag_path.write_bytes(CACHEDIR_TAG_CONTENT)
 
 
-class LFPlugin(object):
+class LFPlugin:
     """ Plugin which implements the --lf (run last-failing) option """
 
     def __init__(self, config):
@@ -163,28 +157,27 @@ class LFPlugin(object):
     def last_failed_paths(self):
         """Returns a set with all Paths()s of the previously failed nodeids (cached).
         """
-        result = getattr(self, "_last_failed_paths", None)
-        if result is None:
+        try:
+            return self._last_failed_paths
+        except AttributeError:
             rootpath = Path(self.config.rootdir)
             result = {rootpath / nodeid.split("::")[0] for nodeid in self.lastfailed}
+            result = {x for x in result if x.exists()}
             self._last_failed_paths = result
-        return result
+            return result
 
     def pytest_ignore_collect(self, path):
         """
         Ignore this file path if we are in --lf mode and it is not in the list of
         previously failed files.
         """
-        if (
-            self.active
-            and self.config.getoption("lf")
-            and path.isfile()
-            and self.lastfailed
-        ):
-            skip_it = Path(path) not in self.last_failed_paths()
-            if skip_it:
-                self._skipped_files += 1
-            return skip_it
+        if self.active and self.config.getoption("lf") and path.isfile():
+            last_failed_paths = self.last_failed_paths()
+            if last_failed_paths:
+                skip_it = Path(path) not in self.last_failed_paths()
+                if skip_it:
+                    self._skipped_files += 1
+                return skip_it
 
     def pytest_report_collectionfinish(self):
         if self.active and self.config.getoption("verbose") >= 0:
@@ -233,19 +226,15 @@ class LFPlugin(object):
                     items[:] = previously_failed + previously_passed
 
                 noun = "failure" if self._previously_failed_count == 1 else "failures"
-                if self._skipped_files > 0:
-                    files_noun = "file" if self._skipped_files == 1 else "files"
-                    skipped_files_msg = " (skipped {files} {files_noun})".format(
-                        files=self._skipped_files, files_noun=files_noun
-                    )
-                else:
-                    skipped_files_msg = ""
                 suffix = " first" if self.config.getoption("failedfirst") else ""
-                self._report_status = "rerun previous {count} {noun}{suffix}{skipped_files}".format(
-                    count=self._previously_failed_count,
-                    suffix=suffix,
-                    noun=noun,
-                    skipped_files=skipped_files_msg,
+                self._report_status = "rerun previous {count} {noun}{suffix}".format(
+                    count=self._previously_failed_count, suffix=suffix, noun=noun
+                )
+
+            if self._skipped_files > 0:
+                files_noun = "file" if self._skipped_files == 1 else "files"
+                self._report_status += " (skipped {files} {files_noun})".format(
+                    files=self._skipped_files, files_noun=files_noun
                 )
         else:
             self._report_status = "no previously failed tests, "
@@ -266,7 +255,7 @@ class LFPlugin(object):
             config.cache.set("cache/lastfailed", self.lastfailed)
 
 
-class NFPlugin(object):
+class NFPlugin:
     """ Plugin which implements the --nf (run new-first) option """
 
     def __init__(self, config):
@@ -285,8 +274,8 @@ class NFPlugin(object):
                     other_items[item.nodeid] = item
 
             items[:] = self._get_increasing_order(
-                six.itervalues(new_items)
-            ) + self._get_increasing_order(six.itervalues(other_items))
+                new_items.values()
+            ) + self._get_increasing_order(other_items.values())
         self.cached_nodeids = [x.nodeid for x in items if isinstance(x, pytest.Item)]
 
     def _get_increasing_order(self, items):

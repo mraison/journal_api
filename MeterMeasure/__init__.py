@@ -220,7 +220,7 @@ def create_app(test_config=None):
         try:
             cursor = db.get_db().cursor()
             results = cursor.execute(
-                'SELECT m.* FROM measurements m '
+                'SELECT m.*, r.* FROM measurements m '
                 'inner join joinMeasurementsToRecordSet mjr on m.ID = mjr.measurementsID '
                 'inner join recordSet r ON mjr.recordSetID = r.ID '
                 'WHERE r.ID = ?',
@@ -336,7 +336,13 @@ def create_app(test_config=None):
         if len(data) == 0:
             return jsonify({'error_detail': 'No points found'}), 404
 
-        return jsonify(data[0]), 200
+        def df(d):
+            d['value'] = choose_between_value_types(d['intVal'], d['floatVal'], d['strVal'])
+            return d
+
+        response_data = [df(d) for d in data]
+
+        return jsonify(response_data[0]), 200
 
     ## @todo This is the last bit for the api. I need to decide who own's a point and whether, after delete,
     # it should be included in anyone elses groups...Initially I think it's safe to say no.

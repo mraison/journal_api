@@ -1,15 +1,16 @@
 import argparse
+import sys
 import warnings
+from gettext import gettext
 
 import py
-import six
 
 from _pytest.config.exceptions import UsageError
 
 FILE_OR_DIR = "file_or_dir"
 
 
-class Parser(object):
+class Parser:
     """ Parser for command line arguments and ini-file values.
 
     :ivar extra_info: dict of generic param -> value to display in case
@@ -144,12 +145,12 @@ class ArgumentError(Exception):
 
     def __str__(self):
         if self.option_id:
-            return "option %s: %s" % (self.option_id, self.msg)
+            return "option {}: {}".format(self.option_id, self.msg)
         else:
             return self.msg
 
 
-class Argument(object):
+class Argument:
     """class that mimics the necessary behaviour of optparse.Option
 
     it's currently a least effort implementation
@@ -178,7 +179,7 @@ class Argument(object):
             pass
         else:
             # this might raise a keyerror as well, don't want to catch that
-            if isinstance(typ, six.string_types):
+            if isinstance(typ, str):
                 if typ == "choice":
                     warnings.warn(
                         "`type` argument to addoption() is the string %r."
@@ -281,7 +282,7 @@ class Argument(object):
         return "Argument({})".format(", ".join(args))
 
 
-class OptionGroup(object):
+class OptionGroup:
     def __init__(self, name, description="", parser=None):
         self.name = name
         self.description = description
@@ -329,6 +330,7 @@ class MyOptionParser(argparse.ArgumentParser):
             usage=parser._usage,
             add_help=False,
             formatter_class=DropShorterLongHelpFormatter,
+            allow_abbrev=False,
         )
         # extra_info is a dict of (param -> value) to display if there's
         # an usage error to provide more contextual information to the user
@@ -336,10 +338,10 @@ class MyOptionParser(argparse.ArgumentParser):
 
     def error(self, message):
         """Transform argparse error message into UsageError."""
-        msg = "%s: error: %s" % (self.prog, message)
+        msg = "{}: error: {}".format(self.prog, message)
 
         if hasattr(self._parser, "_config_source_hint"):
-            msg = "%s (%s)" % (msg, self._parser._config_source_hint)
+            msg = "{} ({})".format(msg, self._parser._config_source_hint)
 
         raise UsageError(self.format_usage() + msg)
 
@@ -351,10 +353,46 @@ class MyOptionParser(argparse.ArgumentParser):
                 if arg and arg[0] == "-":
                     lines = ["unrecognized arguments: %s" % (" ".join(argv))]
                     for k, v in sorted(self.extra_info.items()):
-                        lines.append("  %s: %s" % (k, v))
+                        lines.append("  {}: {}".format(k, v))
                     self.error("\n".join(lines))
             getattr(args, FILE_OR_DIR).extend(argv)
         return args
+
+    if sys.version_info[:2] < (3, 8):  # pragma: no cover
+        # Backport of https://github.com/python/cpython/pull/14316 so we can
+        # disable long --argument abbreviations without breaking short flags.
+        def _parse_optional(self, arg_string):
+            if not arg_string:
+                return None
+            if not arg_string[0] in self.prefix_chars:
+                return None
+            if arg_string in self._option_string_actions:
+                action = self._option_string_actions[arg_string]
+                return action, arg_string, None
+            if len(arg_string) == 1:
+                return None
+            if "=" in arg_string:
+                option_string, explicit_arg = arg_string.split("=", 1)
+                if option_string in self._option_string_actions:
+                    action = self._option_string_actions[option_string]
+                    return action, option_string, explicit_arg
+            if self.allow_abbrev or not arg_string.startswith("--"):
+                option_tuples = self._get_option_tuples(arg_string)
+                if len(option_tuples) > 1:
+                    msg = gettext(
+                        "ambiguous option: %(option)s could match %(matches)s"
+                    )
+                    options = ", ".join(option for _, option, _ in option_tuples)
+                    self.error(msg % {"option": arg_string, "matches": options})
+                elif len(option_tuples) == 1:
+                    option_tuple, = option_tuples
+                    return option_tuple
+            if self._negative_number_matcher.match(arg_string):
+                if not self._has_negative_number_optionals:
+                    return None
+            if " " in arg_string:
+                return None
+            return None, arg_string, None
 
 
 class DropShorterLongHelpFormatter(argparse.HelpFormatter):

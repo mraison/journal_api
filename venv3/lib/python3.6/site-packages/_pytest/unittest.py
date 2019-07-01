@@ -1,8 +1,4 @@
 """ discovery and running of std-library "unittest" style tests. """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import sys
 import traceback
 
@@ -112,25 +108,13 @@ class TestCaseFunction(Function):
 
     def setup(self):
         self._testcase = self.parent.obj(self.name)
-        self._fix_unittest_skip_decorator()
+        self._obj = getattr(self._testcase, self.name)
         if hasattr(self, "_request"):
             self._request._fillfixtures()
 
-    def _fix_unittest_skip_decorator(self):
-        """
-        The @unittest.skip decorator calls functools.wraps(self._testcase)
-        The call to functools.wraps() fails unless self._testcase
-        has a __name__ attribute. This is usually automatically supplied
-        if the test is a function or method, but we need to add manually
-        here.
-
-        See issue #1169
-        """
-        if sys.version_info[0] == 2:
-            setattr(self._testcase, "__name__", self.name)
-
     def teardown(self):
         self._testcase = None
+        self._obj = None
 
     def startTest(self, testcase):
         pass
@@ -207,12 +191,7 @@ class TestCaseFunction(Function):
             skip_why = getattr(
                 self._testcase.__class__, "__unittest_skip_why__", ""
             ) or getattr(testMethod, "__unittest_skip_why__", "")
-            try:  # PY3, unittest2 on PY2
-                self._testcase._addSkip(self, self._testcase, skip_why)
-            except TypeError:  # PY2
-                if sys.version_info[0] != 2:
-                    raise
-                self._testcase._addSkip(self, skip_why)
+            self._testcase._addSkip(self, self._testcase, skip_why)
             return True
         return False
 

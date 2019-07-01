@@ -1,10 +1,6 @@
 """(disabled by default) support for testing pytest and pytest plugins."""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import codecs
 import gc
+import importlib
 import os
 import platform
 import re
@@ -12,28 +8,24 @@ import subprocess
 import sys
 import time
 import traceback
+from collections.abc import Sequence
 from fnmatch import fnmatch
 from weakref import WeakKeyDictionary
 
 import py
-import six
 
 import pytest
 from _pytest._code import Source
 from _pytest._io.saferepr import saferepr
-from _pytest.assertion.rewrite import AssertionRewritingHook
 from _pytest.capture import MultiCapture
 from _pytest.capture import SysCapture
-from _pytest.compat import safe_str
-from _pytest.compat import Sequence
-from _pytest.main import EXIT_INTERRUPTED
-from _pytest.main import EXIT_OK
+from _pytest.main import ExitCode
 from _pytest.main import Session
 from _pytest.monkeypatch import MonkeyPatch
 from _pytest.pathlib import Path
 
 IGNORE_PAM = [  # filenames added when obtaining details about the current user
-    u"/var/lib/sss/mc/passwd"
+    "/var/lib/sss/mc/passwd"
 ]
 
 
@@ -75,15 +67,7 @@ def pytest_configure(config):
     )
 
 
-def raise_on_kwargs(kwargs):
-    __tracebackhide__ = True
-    if kwargs:  # pragma: no branch
-        raise TypeError(
-            "Unexpected keyword arguments: {}".format(", ".join(sorted(kwargs)))
-        )
-
-
-class LsofFdLeakChecker(object):
+class LsofFdLeakChecker:
     def get_open_files(self):
         out = self._exec_lsof()
         open_files = self._parse_lsof_output(out)
@@ -152,15 +136,6 @@ class LsofFdLeakChecker(object):
             item.warn(pytest.PytestWarning("\n".join(error)))
 
 
-# XXX copied from execnet's conftest.py - needs to be merged
-winpymap = {
-    "python2.7": r"C:\Python27\python.exe",
-    "python3.4": r"C:\Python34\python.exe",
-    "python3.5": r"C:\Python35\python.exe",
-    "python3.6": r"C:\Python36\python.exe",
-}
-
-
 # used at least by pytest-xdist plugin
 
 
@@ -174,7 +149,7 @@ def _pytest(request):
     return PytestArg(request)
 
 
-class PytestArg(object):
+class PytestArg:
     def __init__(self, request):
         self.request = request
 
@@ -189,7 +164,7 @@ def get_public_names(values):
     return [x for x in values if x[0] != "_"]
 
 
-class ParsedCall(object):
+class ParsedCall:
     def __init__(self, name, kwargs):
         self.__dict__.update(kwargs)
         self._name = name
@@ -197,10 +172,10 @@ class ParsedCall(object):
     def __repr__(self):
         d = self.__dict__.copy()
         del d["_name"]
-        return "<ParsedCall %r(**%r)>" % (self._name, d)
+        return "<ParsedCall {!r}(**{!r})>".format(self._name, d)
 
 
-class HookRecorder(object):
+class HookRecorder:
     """Record all hooks called in a plugin manager.
 
     This wraps all the hook calls in the plugin manager, recording each call
@@ -247,7 +222,7 @@ class HookRecorder(object):
                     break
                 print("NONAMEMATCH", name, "with", call)
             else:
-                pytest.fail("could not find %r check %r" % (name, check))
+                pytest.fail("could not find {!r} check {!r}".format(name, check))
 
     def popcall(self, name):
         __tracebackhide__ = True
@@ -255,7 +230,7 @@ class HookRecorder(object):
             if call._name == name:
                 del self.calls[i]
                 return call
-        lines = ["could not find call %r, in:" % (name,)]
+        lines = ["could not find call {!r}, in:".format(name)]
         lines.extend(["  %s" % x for x in self.calls])
         pytest.fail("\n".join(lines))
 
@@ -292,7 +267,9 @@ class HookRecorder(object):
             )
         if len(values) > 1:
             raise ValueError(
-                "found 2 or more testreports matching %r: %s" % (inamepart, values)
+                "found 2 or more testreports matching {!r}: {}".format(
+                    inamepart, values
+                )
             )
         return values[0]
 
@@ -366,7 +343,7 @@ def _config_for_test():
 rex_outcome = re.compile(r"(\d+) ([\w-]+)")
 
 
-class RunResult(object):
+class RunResult:
     """The result of running a command.
 
     Attributes:
@@ -438,7 +415,7 @@ class RunResult(object):
         assert obtained == expected
 
 
-class CwdSnapshot(object):
+class CwdSnapshot:
     def __init__(self):
         self.__saved = os.getcwd()
 
@@ -446,7 +423,7 @@ class CwdSnapshot(object):
         os.chdir(self.__saved)
 
 
-class SysModulesSnapshot(object):
+class SysModulesSnapshot:
     def __init__(self, preserve=None):
         self.__preserve = preserve
         self.__saved = dict(sys.modules)
@@ -460,7 +437,7 @@ class SysModulesSnapshot(object):
         sys.modules.update(self.__saved)
 
 
-class SysPathsSnapshot(object):
+class SysPathsSnapshot:
     def __init__(self):
         self.__saved = list(sys.path), list(sys.meta_path)
 
@@ -468,7 +445,7 @@ class SysPathsSnapshot(object):
         sys.path[:], sys.meta_path[:] = self.__saved
 
 
-class Testdir(object):
+class Testdir:
     """Temporary test directory with tools to test/run pytest itself.
 
     This is based on the ``tmpdir`` fixture but provides a number of methods
@@ -516,8 +493,12 @@ class Testdir(object):
         # Discard outer pytest options.
         mp.delenv("PYTEST_ADDOPTS", raising=False)
 
+        # Environment (updates) for inner runs.
+        tmphome = str(self.tmpdir)
+        self._env_run_update = {"HOME": tmphome, "USERPROFILE": tmphome}
+
     def __repr__(self):
-        return "<Testdir %r>" % (self.tmpdir,)
+        return "<Testdir {!r}>".format(self.tmpdir)
 
     def __str__(self):
         return str(self.tmpdir)
@@ -562,10 +543,10 @@ class Testdir(object):
         items = list(kwargs.items())
 
         def to_text(s):
-            return s.decode(encoding) if isinstance(s, bytes) else six.text_type(s)
+            return s.decode(encoding) if isinstance(s, bytes) else str(s)
 
         if args:
-            source = u"\n".join(to_text(x) for x in args)
+            source = "\n".join(to_text(x) for x in args)
             basename = self.request.function.__name__
             items.insert(0, (basename, source))
 
@@ -574,7 +555,7 @@ class Testdir(object):
             p = self.tmpdir.join(basename).new(ext=ext)
             p.dirpath().ensure_dir()
             source = Source(value)
-            source = u"\n".join(to_text(line) for line in source.lines)
+            source = "\n".join(to_text(line) for line in source.lines)
             p.write(source.strip().encode(encoding), "wb")
             if ret is None:
                 ret = p
@@ -709,7 +690,7 @@ class Testdir(object):
         p = py.path.local(arg)
         config.hook.pytest_sessionstart(session=session)
         res = session.perform_collect([str(p)], genitems=False)[0]
-        config.hook.pytest_sessionfinish(session=session, exitstatus=EXIT_OK)
+        config.hook.pytest_sessionfinish(session=session, exitstatus=ExitCode.OK)
         return res
 
     def getpathnode(self, path):
@@ -726,7 +707,7 @@ class Testdir(object):
         x = session.fspath.bestrelpath(path)
         config.hook.pytest_sessionstart(session=session)
         res = session.perform_collect([x], genitems=False)[0]
-        config.hook.pytest_sessionfinish(session=session, exitstatus=EXIT_OK)
+        config.hook.pytest_sessionfinish(session=session, exitstatus=ExitCode.OK)
         return res
 
     def genitems(self, colitems):
@@ -788,7 +769,7 @@ class Testdir(object):
         items = [x.item for x in rec.getcalls("pytest_itemcollected")]
         return items, rec
 
-    def inline_run(self, *args, **kwargs):
+    def inline_run(self, *args, plugins=(), no_reraise_ctrlc=False):
         """Run ``pytest.main()`` in-process, returning a HookRecorder.
 
         Runs the :py:func:`pytest.main` function to run all of pytest inside
@@ -799,34 +780,26 @@ class Testdir(object):
 
         :param args: command line arguments to pass to :py:func:`pytest.main`
 
-        :param plugins: (keyword-only) extra plugin instances the
-           ``pytest.main()`` instance should use
+        :kwarg plugins: extra plugin instances the ``pytest.main()`` instance should use.
+
+        :kwarg no_reraise_ctrlc: typically we reraise keyboard interrupts from the child run. If
+            True, the KeyboardInterrupt exception is captured.
 
         :return: a :py:class:`HookRecorder` instance
         """
-        plugins = kwargs.pop("plugins", [])
-        no_reraise_ctrlc = kwargs.pop("no_reraise_ctrlc", None)
-        raise_on_kwargs(kwargs)
+        # (maybe a cpython bug?) the importlib cache sometimes isn't updated
+        # properly between file creation and inline_run (especially if imports
+        # are interspersed with file creation)
+        importlib.invalidate_caches()
 
+        plugins = list(plugins)
         finalizers = []
         try:
             # Do not load user config (during runs only).
             mp_run = MonkeyPatch()
-            mp_run.setenv("HOME", str(self.tmpdir))
-            mp_run.setenv("USERPROFILE", str(self.tmpdir))
+            for k, v in self._env_run_update.items():
+                mp_run.setenv(k, v)
             finalizers.append(mp_run.undo)
-
-            # When running pytest inline any plugins active in the main test
-            # process are already imported.  So this disables the warning which
-            # will trigger to say they can no longer be rewritten, which is
-            # fine as they have already been rewritten.
-            orig_warn = AssertionRewritingHook._warn_already_imported
-
-            def revert_warn_already_imported():
-                AssertionRewritingHook._warn_already_imported = orig_warn
-
-            finalizers.append(revert_warn_already_imported)
-            AssertionRewritingHook._warn_already_imported = lambda *a: None
 
             # Any sys.module or sys.path changes done while running pytest
             # inline should be reverted after the test run completes to avoid
@@ -843,7 +816,7 @@ class Testdir(object):
 
             rec = []
 
-            class Collect(object):
+            class Collect:
                 def pytest_configure(x, config):
                     rec.append(self.make_hook_recorder(config.pluginmanager))
 
@@ -853,14 +826,14 @@ class Testdir(object):
                 reprec = rec.pop()
             else:
 
-                class reprec(object):
+                class reprec:
                     pass
 
             reprec.ret = ret
 
             # typically we reraise keyboard interrupts from the child run
             # because it's our user requesting interruption of the testing
-            if ret == EXIT_INTERRUPTED and not no_reraise_ctrlc:
+            if ret == ExitCode.INTERRUPTED and not no_reraise_ctrlc:
                 calls = reprec.getcalls("pytest_keyboard_interrupt")
                 if calls and calls[-1].excinfo.type == KeyboardInterrupt:
                     raise KeyboardInterrupt()
@@ -885,13 +858,13 @@ class Testdir(object):
                 reprec = self.inline_run(*args, **kwargs)
             except SystemExit as e:
 
-                class reprec(object):
+                class reprec:
                     ret = e.args[0]
 
             except Exception:
                 traceback.print_exc()
 
-                class reprec(object):
+                class reprec:
                     ret = 3
 
         finally:
@@ -915,7 +888,7 @@ class Testdir(object):
     def _ensure_basetemp(self, args):
         args = list(args)
         for x in args:
-            if safe_str(x).startswith("--basetemp"):
+            if str(x).startswith("--basetemp"):
                 break
         else:
             args.append("--basetemp=%s" % self.tmpdir.dirpath("basetemp"))
@@ -973,10 +946,8 @@ class Testdir(object):
         for item in items:
             if item.name == funcname:
                 return item
-        assert 0, "%r item not found in module:\n%s\nitems: %s" % (
-            funcname,
-            source,
-            items,
+        assert 0, "{!r} item not found in module:\n{}\nitems: {}".format(
+            funcname, source, items
         )
 
     def getitems(self, source):
@@ -1053,9 +1024,7 @@ class Testdir(object):
         env["PYTHONPATH"] = os.pathsep.join(
             filter(None, [os.getcwd(), env.get("PYTHONPATH", "")])
         )
-        # Do not load user config.
-        env["HOME"] = str(self.tmpdir)
-        env["USERPROFILE"] = env["HOME"]
+        env.update(self._env_run_update)
         kw["env"] = env
 
         if stdin is Testdir.CLOSE_STDIN:
@@ -1073,15 +1042,15 @@ class Testdir(object):
 
         return popen
 
-    def run(self, *cmdargs, **kwargs):
+    def run(self, *cmdargs, timeout=None, stdin=CLOSE_STDIN):
         """Run a command with arguments.
 
         Run a process using subprocess.Popen saving the stdout and stderr.
 
         :param args: the sequence of arguments to pass to `subprocess.Popen()`
-        :param timeout: the period in seconds after which to timeout and raise
+        :kwarg timeout: the period in seconds after which to timeout and raise
             :py:class:`Testdir.TimeoutExpired`
-        :param stdin: optional standard input.  Bytes are being send, closing
+        :kwarg stdin: optional standard input.  Bytes are being send, closing
             the pipe, otherwise it is passed through to ``popen``.
             Defaults to ``CLOSE_STDIN``, which translates to using a pipe
             (``subprocess.PIPE``) that gets closed.
@@ -1091,10 +1060,6 @@ class Testdir(object):
         """
         __tracebackhide__ = True
 
-        timeout = kwargs.pop("timeout", None)
-        stdin = kwargs.pop("stdin", Testdir.CLOSE_STDIN)
-        raise_on_kwargs(kwargs)
-
         cmdargs = [
             str(arg) if isinstance(arg, py.path.local) else arg for arg in cmdargs
         ]
@@ -1102,8 +1067,8 @@ class Testdir(object):
         p2 = self.tmpdir.join("stderr")
         print("running:", *cmdargs)
         print("     in:", py.path.local())
-        f1 = codecs.open(str(p1), "w", encoding="utf8")
-        f2 = codecs.open(str(p2), "w", encoding="utf8")
+        f1 = open(str(p1), "w", encoding="utf8")
+        f2 = open(str(p2), "w", encoding="utf8")
         try:
             now = time.time()
             popen = self.popen(
@@ -1130,30 +1095,16 @@ class Testdir(object):
 
             if timeout is None:
                 ret = popen.wait()
-            elif six.PY3:
+            else:
                 try:
                     ret = popen.wait(timeout)
                 except subprocess.TimeoutExpired:
                     handle_timeout()
-            else:
-                end = time.time() + timeout
-
-                resolution = min(0.1, timeout / 10)
-
-                while True:
-                    ret = popen.poll()
-                    if ret is not None:
-                        break
-
-                    if time.time() > end:
-                        handle_timeout()
-
-                    time.sleep(resolution)
         finally:
             f1.close()
             f2.close()
-        f1 = codecs.open(str(p1), "r", encoding="utf8")
-        f2 = codecs.open(str(p2), "r", encoding="utf8")
+        f1 = open(str(p1), "r", encoding="utf8")
+        f2 = open(str(p2), "r", encoding="utf8")
         try:
             out = f1.read().splitlines()
             err = f2.read().splitlines()
@@ -1169,7 +1120,7 @@ class Testdir(object):
             for line in lines:
                 print(line, file=fp)
         except UnicodeEncodeError:
-            print("couldn't print to %s because of encoding" % (fp,))
+            print("couldn't print to {} because of encoding".format(fp))
 
     def _getpytestargs(self):
         return sys.executable, "-mpytest"
@@ -1186,7 +1137,7 @@ class Testdir(object):
         """Run python -c "command", return a :py:class:`RunResult`."""
         return self.run(sys.executable, "-c", command)
 
-    def runpytest_subprocess(self, *args, **kwargs):
+    def runpytest_subprocess(self, *args, timeout=None):
         """Run pytest as a subprocess with given arguments.
 
         Any plugins added to the :py:attr:`plugins` list will be added using the
@@ -1202,9 +1153,6 @@ class Testdir(object):
         Returns a :py:class:`RunResult`.
         """
         __tracebackhide__ = True
-        timeout = kwargs.pop("timeout", None)
-        raise_on_kwargs(kwargs)
-
         p = py.path.local.make_numbered_dir(
             prefix="runpytest-", keep=None, rootdir=self.tmpdir
         )
@@ -1226,7 +1174,7 @@ class Testdir(object):
         """
         basetemp = self.tmpdir.mkdir("temp-pexpect")
         invoke = " ".join(map(str, self._getpytestargs()))
-        cmd = "%s --basetemp=%s %s" % (invoke, basetemp, string)
+        cmd = "{} --basetemp={} {}".format(invoke, basetemp, string)
         return self.spawn(cmd, expect_timeout=expect_timeout)
 
     def spawn(self, cmd, expect_timeout=10.0):
@@ -1241,7 +1189,12 @@ class Testdir(object):
         if sys.platform.startswith("freebsd"):
             pytest.xfail("pexpect does not work reliably on freebsd")
         logfile = self.tmpdir.join("spawn.out").open("wb")
-        child = pexpect.spawn(cmd, logfile=logfile)
+
+        # Do not load user config.
+        env = os.environ.copy()
+        env.update(self._env_run_update)
+
+        child = pexpect.spawn(cmd, logfile=logfile, env=env)
         self.request.addfinalizer(logfile.close)
         child.timeout = expect_timeout
         return child
@@ -1251,10 +1204,12 @@ def getdecoded(out):
     try:
         return out.decode("utf-8")
     except UnicodeDecodeError:
-        return "INTERNAL not-utf8-decodeable, truncated string:\n%s" % (saferepr(out),)
+        return "INTERNAL not-utf8-decodeable, truncated string:\n{}".format(
+            saferepr(out)
+        )
 
 
-class LineComp(object):
+class LineComp:
     def __init__(self):
         self.stringio = py.io.TextIO()
 
@@ -1272,7 +1227,7 @@ class LineComp(object):
         return LineMatcher(lines1).fnmatch_lines(lines2)
 
 
-class LineMatcher(object):
+class LineMatcher:
     """Flexible matching of text.
 
     This is a convenience class to test large texts like the output of
@@ -1410,5 +1365,5 @@ class LineMatcher(object):
                     self._log("    and:", repr(nextline))
                 extralines.append(nextline)
             else:
-                self._log("remains unmatched: %r" % (line,))
+                self._log("remains unmatched: {!r}".format(line))
                 pytest.fail(self._log_text)
