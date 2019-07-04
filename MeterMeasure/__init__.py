@@ -7,6 +7,7 @@ import urllib.parse
 import re
 from . import db
 import click
+from .helpers.requestHelper import isUserAuthorizedForEndPoint
 
 from .shared.middleware.jwt import check_jwt
 from .shared.configs.serviceConsts import SECRET
@@ -16,14 +17,31 @@ JWT_SECRET = SECRET
 ## defining additional middleware:
 from functools import wraps
 
+# This is for pages restricted to an individual user.
+# i.e. recordSet management pages. Right now you can only view your own.
+# also the groups page. This is more of because we want to make sure you're a user in the system before you start adding
+# groups.
 def verify_user():
     def decorator(f):
         @wraps(f)
         def decorated_function(jwt_body, userID, *args, **kws):
-            if not jwt_body['ID'] == userID:
+            click.echo(str(jwt_body['ID']) + ' -vs- ' + str(userID))
+            if not str(jwt_body['ID']) == str(userID):
                 abort(401)
 
             return f(userID, *args, **kws)
+        return decorated_function
+    return decorator
+
+
+def verify_cross_user_access(action):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(jwt_body, userID, recordSetID, *args, **kws):
+            if not isUserAuthorizedForEndPoint(jwt_body['ID'], userID, recordSetID, action):
+                abort(401)
+
+            return f(userID, recordSetID, *args, **kws)
         return decorated_function
     return decorator
 
@@ -143,13 +161,13 @@ def create_app(test_config=None):
 
         data = [dict(zip([key[0] for key in cursor.description], row)) for row in results]
         if len(data) == 0:
-            return jsonify({'error_detail': 'No points found'}), 404
+            return jsonify([]), 404
 
         return jsonify(data), 200
 
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('r')
     def get_record_set(userID, recordSetID):
         try:
             cursor = db.get_db().cursor()
@@ -172,7 +190,7 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>', methods=['PUT'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('w')
     def update_record_set(userID, recordSetID):
         req_data = request.get_json()
 
@@ -213,7 +231,7 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('r')
     def get_measurements(userID, recordSetID):
         ## MeasurementID will be unique across the whole database so we can just do a simple select on the measurement table.
         ## No need for joining on the record set other than to esnure user's don't try to grab points from other sets off this endpoint.
@@ -246,7 +264,7 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements', methods=['POST'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('w')
     def record_measurement(userID, recordSetID):
         # print(request, file=sys.stderr)
         # print(request, file=sys.stdout)
@@ -313,7 +331,7 @@ def create_app(test_config=None):
 
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements/<int:measurementID>', methods=['GET'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('r')
     def get_measurement(userID, recordSetID, measurementID):
         ## MeasurementID will be unique across the whole database so we can just do a simple select on the measurement table.
         ## No need for joining on the record set other than to esnure user's don't try to grab points from other sets off this endpoint.
@@ -348,7 +366,7 @@ def create_app(test_config=None):
     # it should be included in anyone elses groups...Initially I think it's safe to say no.
     @app.route('/users/<int:userID>/recordSets/<int:recordSetID>/measurements/<int:measurementID>', methods=['DELETE'])
     @check_jwt(app.config['SECRET_KEY'])
-    @verify_user()
+    @verify_cross_user_access('w')
     def delete_point(userID, recordSetID, measurementID):
         # @todo just return the http response
         # @todo just return the http response
